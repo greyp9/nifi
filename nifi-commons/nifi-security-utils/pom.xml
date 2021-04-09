@@ -103,6 +103,15 @@
             <artifactId>jcl-over-slf4j</artifactId>
         </dependency>
     </dependencies>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>at.favre.lib</groupId>
+                <artifactId>bytes</artifactId>
+                <version>1.4.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>
