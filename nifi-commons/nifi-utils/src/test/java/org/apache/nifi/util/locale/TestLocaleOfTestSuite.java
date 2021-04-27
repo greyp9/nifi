@@ -45,7 +45,7 @@ public class TestLocaleOfTestSuite {
         final String userRegion = System.getProperty("user.region");
         final String userTimezone = System.getProperty("user.timezone");
         String languageTag = Locale.getDefault().toLanguageTag();
-        logger.warning(String.format(
+        logger.severe(String.format(
                 "Test environment: locale=[%s] user.language=[%s], user.country=[%s], user.region=[%s], user.timezone=[%s]",
                 languageTag, userLanguage, userCountry, userRegion, userTimezone));
         Assume.assumeTrue(Arrays.asList("en", "fr", "ja").contains(userLanguage));
