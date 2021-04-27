@@ -435,9 +435,15 @@
                         <argLine combine.children="append">-Xmx1G
                             -Djava.net.preferIPv4Stack=true
                             ${maven.surefire.arguments}
+                            -Dfile.encoding=UTF-8</argLine>
+<!--
+                        <argLine combine.children="append">-Xmx1G
+                            -Djava.net.preferIPv4Stack=true
+                            ${maven.surefire.arguments}
                             -Duser.language=${user.language}
                             -Duser.country=${user.country}
                             -Dfile.encoding=UTF-8</argLine>
+-->
                     </configuration>
                     <dependencies>
                         <dependency>

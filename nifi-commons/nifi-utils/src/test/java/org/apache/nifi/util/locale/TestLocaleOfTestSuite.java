@@ -16,9 +16,11 @@
  */
 package org.apache.nifi.util.locale;
 
+import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
+import java.text.NumberFormat;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.logging.Logger;
@@ -28,12 +30,16 @@ import java.util.logging.Logger;
  */
 public class TestLocaleOfTestSuite {
 
+    private final Logger logger = Logger.getLogger(getClass().getName());
+
     /**
-     * Utility test that logs the {@link java.util.Locale} in which the project test suite is running.
+     * Utility test that logs the {@link java.util.Locale} in which the project test suite is running.  The
+     * assumptions validate the expected environment when run in Github CI.
+     *
+     * See also: "nifi/.github/workflows/ci-workflow.yml"
      */
     @Test
     public void testLocaleOfTestSuiteExecution() {
-        Logger logger = Logger.getLogger(getClass().getName());
         final String userLanguage = System.getProperty("user.language");
         final String userCountry = System.getProperty("user.country");
         final String userRegion = System.getProperty("user.region");
@@ -44,5 +50,18 @@ public class TestLocaleOfTestSuite {
         Assume.assumeTrue(Arrays.asList("en", "fr", "ja").contains(userLanguage));
         Assume.assumeTrue(Arrays.asList("US", "AU", "FR", "JP").contains(userCountry));
         Assume.assumeTrue(Arrays.asList("en-US", "fr-FR").contains(languageTag));
+    }
+
+    /**
+     * Some validation of expected outputs, given different {@link java.util.Locale} settings.  Limited to a few
+     * locales for brevity.  The locales here are all absolute (no dependence on test environment).
+     */
+    @Test
+    public void testLocaleExpectedOutputs() {
+        Assert.assertEquals("1\u00a0000", NumberFormat.getInstance(Locale.FRANCE).format(1000));
+        Assert.assertEquals("1\u00a0000", NumberFormat.getInstance(Locale.CANADA_FRENCH).format(1000));
+        Assert.assertEquals("1\u00a0000", NumberFormat.getInstance(Locale.FRENCH).format(1000));
+        Assert.assertEquals("1,000", NumberFormat.getInstance(Locale.US).format(1000));
+        Assert.assertEquals("1,000", NumberFormat.getInstance(Locale.JAPAN).format(1000));
     }
 }

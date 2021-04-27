@@ -94,24 +94,11 @@ jobs:
           MAVEN_OPTS: -Xmx2g -XX:ReservedCodeCacheSize=1g -XX:+UseG1GC -Dorg.slf4j.simpleLogger.defaultLogLevel=WARN -Dmaven.surefire.arguments="-Duser.language=en -Duser.region=AU -Duser.timezone=Australia/Melbourne" -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false
         run: |
           mvn -V -T 0.7C package verify -B -Pcontrib-check,include-grpc -Ddir-only -ntp -ff -pl -nifi-assembly,-nifi-toolkit/nifi-toolkit-assembly,-nifi-system-tests -nsu
-      - name: Publish Test Report
-        if: ${{ always() }}
-        uses: scacap/action-surefire-report@v1
-        with:
-          report_paths: '**/surefire-reports/TEST-*.xml'
-          check_name: Test Report (ubuntu)
-      - name: Publish Unit Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v1
-        if: always()
-        with:
-          files: "**/surefire-reports/TEST-*.xml"
-          report_individual_runs: true
-          check_name: Unit Test Results (ubuntu)
       - name: Upload artifact
         uses: actions/upload-artifact@v2
         if: always()
         with:
-          name: surefire-reports
+          name: surefire-reports-en
           path: "**/surefire-reports/TEST-*.xml"
       - name: Disk After Build
         run: |
@@ -189,6 +176,12 @@ jobs:
           MAVEN_OPTS: -Xmx2g -XX:ReservedCodeCacheSize=1g -XX:+UseG1GC -Dorg.slf4j.simpleLogger.defaultLogLevel=WARN -Dmaven.surefire.arguments="-Duser.language=ja -Duser.region=JP -Duser.timezone=Asia/Tokyo" -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false
         run: |
           mvn -V -T 0.7C package verify -B -Pcontrib-check,include-grpc -Ddir-only -ntp -ff -pl -nifi-assembly,-nifi-toolkit/nifi-toolkit-assembly,-nifi-system-tests -nsu
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: surefire-reports-ja
+          path: "**/surefire-reports/TEST-*.xml"
       - name: Disk After Build
         run: |
           df -h
@@ -256,3 +249,9 @@ jobs:
           MAVEN_OPTS: -Xmx2g -Dorg.slf4j.simpleLogger.defaultLogLevel=WARN -Dmaven.surefire.arguments="-Duser.language=fr -Duser.region=FR -Duser.timezone=Europe/Paris" -Dhttp.keepAlive=false -Dmaven.wagon.http.pool=false
         run: |
           mvn -V -T 0.7C package -B -Ddir-only -ntp -ff -pl -nifi-assembly -pl -nifi-system-tests -nsu
+      - name: Upload artifact
+        uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: surefire-reports-fr
+          path: "**/surefire-reports/TEST-*.xml"
