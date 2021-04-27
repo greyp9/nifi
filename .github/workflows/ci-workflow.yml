@@ -112,7 +112,7 @@ jobs:
         if: always()
         with:
           name: surefire-reports
-          path: "target/surefire-reports/TEST-*.xml"
+          path: "**/surefire-reports/TEST-*.xml"
       - name: Disk After Build
         run: |
           df -h
