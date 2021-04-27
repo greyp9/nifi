@@ -422,7 +422,11 @@
                     <configuration>
                         <systemPropertyVariables combine.children="append">
                             <java.awt.headless>true</java.awt.headless>
+                            <org.slf4j.simpleLogger.defaultLogLevel>${org.slf4j.simpleLogger.defaultLogLevel}</org.slf4j.simpleLogger.defaultLogLevel>
                             <user.language>${user.language}</user.language>
+                            <user.country>${user.country}</user.country>
+                            <user.region>${user.region}</user.region>
+                            <user.timezone>${user.timezone}</user.timezone>
                         </systemPropertyVariables>
                         <includes>
                             <include>**/*Test.class</include>

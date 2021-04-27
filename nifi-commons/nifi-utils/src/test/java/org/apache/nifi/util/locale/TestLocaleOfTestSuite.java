@@ -30,8 +30,6 @@ import java.util.logging.Logger;
  */
 public class TestLocaleOfTestSuite {
 
-    private final Logger logger = Logger.getLogger(getClass().getName());
-
     /**
      * Utility test that logs the {@link java.util.Locale} in which the project test suite is running.  The
      * assumptions validate the expected environment when run in Github CI.
@@ -40,12 +38,13 @@ public class TestLocaleOfTestSuite {
      */
     @Test
     public void testLocaleOfTestSuiteExecution() {
+        final Logger logger = Logger.getLogger(getClass().getName());
         final String userLanguage = System.getProperty("user.language");
         final String userCountry = System.getProperty("user.country");
         final String userRegion = System.getProperty("user.region");
         final String userTimezone = System.getProperty("user.timezone");
         String languageTag = Locale.getDefault().toLanguageTag();
-        logger.severe(String.format(
+        logger.warning(String.format(
                 "Test environment: locale=[%s] user.language=[%s], user.country=[%s], user.region=[%s], user.timezone=[%s]",
                 languageTag, userLanguage, userCountry, userRegion, userTimezone));
         Assume.assumeTrue(Arrays.asList("en", "fr", "ja").contains(userLanguage));
