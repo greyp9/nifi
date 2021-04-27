@@ -100,6 +100,12 @@ jobs:
         with:
           report_paths: '**/surefire-reports/TEST-*.xml'
           check_name: Test Report (ubuntu)
+      - name: Publish Unit Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v1
+        if: always()
+        with:
+          files: "**/surefire-reports/TEST-*.xml"
+          report_individual_runs: true
       - name: Disk After Build
         run: |
           df -h
