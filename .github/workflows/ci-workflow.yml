@@ -111,7 +111,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: surefire-reports
-          path: "**/surefire-reports/**"
+          path: "target/surefire-reports/TEST-*.xml"
       - name: Disk After Build
         run: |
           df -h
