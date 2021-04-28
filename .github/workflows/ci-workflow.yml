@@ -253,11 +253,11 @@ jobs:
           mvn -V -T 0.7C package -B -Ddir-only -ntp -ff -pl -nifi-assembly -pl -nifi-system-tests -nsu
       - name: Upload artifact
         uses: actions/upload-artifact@v2
-        if: always()
+        if: ${{ false }}
         with:
           name: surefire-reports-fr
           path: |
             '**/surefire-reports/TEST-*.xml'
             '!**/node_modules/**'
-            '!**/nifi-jolt-transform-json-ui/**'
+            '!**/nifi-nar-bundles/nifi-standard-bundle/nifi-jolt-transform-json-ui/**'
           retention-days: 3
