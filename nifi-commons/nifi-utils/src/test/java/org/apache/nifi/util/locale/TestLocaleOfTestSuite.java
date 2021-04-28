@@ -44,13 +44,13 @@ public class TestLocaleOfTestSuite {
         final String userRegion = System.getProperty("user.region");
         final String userTimezone = System.getProperty("user.timezone");
         String languageTag = Locale.getDefault().toLanguageTag();
-        logger.warning(String.format(
+        logger.info(String.format(
                 "Test environment: locale=[%s] user.language=[%s], user.country=[%s], user.region=[%s], user.timezone=[%s]",
                 languageTag, userLanguage, userCountry, userRegion, userTimezone));
         Assume.assumeTrue(Arrays.asList("en", "fr", "ja").contains(userLanguage));
         Assume.assumeTrue(Arrays.asList("US", "AU", "FR", "JP").contains(userCountry));
         Assume.assumeTrue(Arrays.asList("en-US", "fr-FR").contains(languageTag));
-        Assume.assumeTrue(false);
+        Assume.assumeTrue("unconditionally force junit output to XML report",false);
     }
 
     /**
