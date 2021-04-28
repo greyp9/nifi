@@ -50,6 +50,7 @@ public class TestLocaleOfTestSuite {
         Assume.assumeTrue(Arrays.asList("en", "fr", "ja").contains(userLanguage));
         Assume.assumeTrue(Arrays.asList("US", "AU", "FR", "JP").contains(userCountry));
         Assume.assumeTrue(Arrays.asList("en-US", "fr-FR").contains(languageTag));
+        Assume.assumeTrue(false);
     }
 
     /**
