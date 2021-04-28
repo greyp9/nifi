@@ -256,5 +256,7 @@ jobs:
         if: always()
         with:
           name: surefire-reports-fr
-          path: "**/surefire-reports/TEST-*.xml"
+          path: |
+            **/surefire-reports/TEST-*.xml
+            !**/node_modules
           retention-days: 3
