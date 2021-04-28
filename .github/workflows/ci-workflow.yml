@@ -257,6 +257,7 @@ jobs:
         with:
           name: surefire-reports-fr
           path: |
-            **/surefire-reports/TEST-*.xml
-            !**/node_modules/**
+            '**/surefire-reports/TEST-*.xml'
+            '!**/node_modules/**'
+            '!**/nifi-jolt-transform-json-ui/**'
           retention-days: 3
