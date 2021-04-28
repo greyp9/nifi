@@ -258,5 +258,5 @@ jobs:
           name: surefire-reports-fr
           path: |
             **/surefire-reports/TEST-*.xml
-            !**/node_modules
+            !**/node_modules/**
           retention-days: 3
