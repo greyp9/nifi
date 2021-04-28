@@ -31,8 +31,6 @@ public class StringUtilsTest {
 
   @Test
   public void testIsBlank() {
-    assertFalse(StringUtils.isBlank(""));  // purposeful failure
-
     assertFalse(StringUtils.isBlank("0"));
     assertFalse(StringUtils.isBlank("\u0000"));
     assertFalse(StringUtils.isBlank(" \u0000 "));
