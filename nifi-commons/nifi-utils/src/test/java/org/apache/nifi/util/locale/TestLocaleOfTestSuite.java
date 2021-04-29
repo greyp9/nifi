@@ -20,6 +20,7 @@ import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
+import java.text.DecimalFormatSymbols;
 import java.text.NumberFormat;
 import java.util.Arrays;
 import java.util.Locale;
@@ -64,5 +65,11 @@ public class TestLocaleOfTestSuite {
         Assert.assertEquals("1\u00a0000", NumberFormat.getInstance(Locale.FRENCH).format(1000));
         Assert.assertEquals("1,000", NumberFormat.getInstance(Locale.US).format(1000));
         Assert.assertEquals("1,000", NumberFormat.getInstance(Locale.JAPAN).format(1000));
+
+        Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.US).getExponentSeparator());
+        Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.forLanguageTag("en-AU")).getExponentSeparator());
+        Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.FRANCE).getExponentSeparator());
+        Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.JAPAN).getExponentSeparator());
+        Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.forLanguageTag("xx-YY")).getExponentSeparator());
     }
 }
