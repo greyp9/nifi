@@ -25,6 +25,7 @@ import java.text.NumberFormat;
 import java.util.Arrays;
 import java.util.Locale;
 import java.util.logging.Logger;
+import java.util.regex.Pattern;
 
 /**
  * Testing of the test suite environment {@link java.util.Locale}.
@@ -66,8 +67,12 @@ public class TestLocaleOfTestSuite {
         Assert.assertEquals("1,000", NumberFormat.getInstance(Locale.US).format(1000));
         Assert.assertEquals("1,000", NumberFormat.getInstance(Locale.JAPAN).format(1000));
 
+        final String runtimeJavaVersion = System.getProperty("java.version");
+        final boolean isJava11 = Pattern.compile("11.+").matcher(runtimeJavaVersion).matches();
+        final String expectedEnAu = (isJava11 ? "e" : "E");
+        Assert.assertEquals(expectedEnAu, DecimalFormatSymbols.getInstance(Locale.forLanguageTag("en-AU")).getExponentSeparator());
+
         Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.US).getExponentSeparator());
-        Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.forLanguageTag("en-AU")).getExponentSeparator());
         Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.FRANCE).getExponentSeparator());
         Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.JAPAN).getExponentSeparator());
         Assert.assertEquals("E", DecimalFormatSymbols.getInstance(Locale.forLanguageTag("xx-YY")).getExponentSeparator());
