@@ -101,7 +101,7 @@ jobs:
           name: surefire-reports-en
           path: |
             '**/surefire-reports/TEST-*.xml'
-            '**/gc.*.log'
+            '**/gc.log'
           retention-days: 1
       - name: Disk After Build
         run: |
@@ -186,7 +186,7 @@ jobs:
           name: surefire-reports-ja
           path: |
             '**/surefire-reports/TEST-*.xml'
-            '**/gc.*.log'
+            '**/gc.log'
           retention-days: 1
       - name: Disk After Build
         run: |
