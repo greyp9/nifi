@@ -100,9 +100,9 @@ jobs:
         with:
           name: surefire-reports-en
           path: |
+            gc.log
+            target/rat.txt
             '**/surefire-reports/TEST-*.xml'
-            '**/gc.log'
-            '**/rat.txt'
           retention-days: 1
       - name: Disk After Build
         run: |
@@ -186,9 +186,9 @@ jobs:
         with:
           name: surefire-reports-ja
           path: |
+            gc.log
+            target/rat.txt
             '**/surefire-reports/TEST-*.xml'
-            '**/gc.log'
-            '**/rat.txt'
           retention-days: 1
       - name: Disk After Build
         run: |
