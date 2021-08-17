@@ -22,10 +22,20 @@
     <packaging>pom</packaging>
     <description>Apache NiFi is an easy to use, powerful, and reliable system to process and distribute data.</description>
     <modules>
+
+
+
+
+
         <module>nifi-commons</module>
         <module>nifi-api</module>
+
+
+
+
         <module>nifi-framework-api</module>
         <module>nifi-server-api</module>
+<!--
         <module>nifi-bootstrap</module>
         <module>nifi-mock</module>
         <module>nifi-nar-bundles</module>
@@ -39,6 +49,7 @@
         <module>nifi-stateless</module>
         <module>nifi-registry</module>
         <module>nifi-toolkit</module>
+-->
     </modules>
     <url>https://nifi.apache.org</url>
     <organization>
