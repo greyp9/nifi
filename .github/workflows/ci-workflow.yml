@@ -49,6 +49,10 @@ jobs:
     runs-on: ubuntu-latest
     name: Ubuntu Zulu JDK 11 EN
     steps:
+      - name: Cancel All But Latest
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          all_but_latest: true
       - name: System Information
         run: |
           cat /proc/cpuinfo
@@ -95,6 +99,10 @@ jobs:
     runs-on: macos-latest
     name: MacOS Adopt JDK 8 JP
     steps:
+      - name: Cancel All But Latest
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          all_but_latest: true
       - name: System Information
         run: |
           top -l 1 | grep PhysMem
@@ -141,6 +149,10 @@ jobs:
     runs-on: windows-latest
     name: Windows Zulu JDK 8 FR
     steps:
+      - name: Cancel All But Latest
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          all_but_latest: true
       - name: System Information
         run: |
           systeminfo
