@@ -35,13 +35,6 @@ env:
     -ff
   MAVEN_PROFILES: >-
     -P contrib-check
-    -P include-grpc
-  MAVEN_PROJECTS: >-
-    -pl -nifi-assembly
-    -pl -nifi-toolkit/nifi-toolkit-assembly
-    -pl -nifi-registry/nifi-registry-assembly
-    -pl -minifi/minifi-assembly
-    -pl -nifi-system-tests
 
 jobs:
   ubuntu-build-en:
@@ -49,6 +42,10 @@ jobs:
     runs-on: ubuntu-latest
     name: Ubuntu Zulu JDK 11 EN
     steps:
+      - name: Cancel All But Latest
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          all_but_latest: true
       - name: System Information
         run: |
           cat /proc/cpuinfo
@@ -87,14 +84,16 @@ jobs:
             -Duser.timezone=Australia/Melbourne
         run: >
           ${{ env.MAVEN_COMMAND }}
-          ${{ env.MAVEN_PROFILES }}
-          ${{ env.MAVEN_PROJECTS }}
 
   macos-build-jp:
     timeout-minutes: 120
     runs-on: macos-latest
     name: MacOS Adopt JDK 8 JP
     steps:
+      - name: Cancel All But Latest
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          all_but_latest: true
       - name: System Information
         run: |
           top -l 1 | grep PhysMem
@@ -133,14 +132,16 @@ jobs:
             -Duser.timezone=Asia/Tokyo
         run: >-
           ${{ env.MAVEN_COMMAND }}
-          ${{ env.MAVEN_PROFILES }}
-          ${{ env.MAVEN_PROJECTS }}
 
   windows-build:
     timeout-minutes: 120
     runs-on: windows-latest
     name: Windows Zulu JDK 8 FR
     steps:
+      - name: Cancel All But Latest
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          all_but_latest: true
       - name: System Information
         run: |
           systeminfo
@@ -186,4 +187,3 @@ jobs:
             -Duser.timezone=Europe/Paris
         run: >-
           ${{ env.MAVEN_COMMAND }}
-          ${{ env.MAVEN_PROJECTS }}
