@@ -38,6 +38,8 @@
 
         <module>nifi-nar-bundles</module>
         <module>nifi-assembly</module>
+
+
         <module>nifi-docs</module>
         <module>nifi-maven-archetypes</module>
         <module>nifi-external</module>
