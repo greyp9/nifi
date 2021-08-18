@@ -34,6 +34,8 @@
 
         <module>nifi-bootstrap</module>
         <module>nifi-mock</module>
+
+
         <module>nifi-nar-bundles</module>
         <module>nifi-assembly</module>
         <module>nifi-docs</module>
