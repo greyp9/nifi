@@ -77,9 +77,15 @@ public abstract class AbstractAWSProcessor<ClientType extends AmazonWebServiceCl
             .description("FlowFiles are routed to success relationship").build();
     public static final Relationship REL_FAILURE = new Relationship.Builder().name("failure")
             .description("FlowFiles are routed to failure relationship").build();
+    public static final Relationship REL_COMMS_FAILURE = new Relationship.Builder().name("comms.failure")
+            .description("Any FlowFile that could not be fetched from the remote server due to a communications failure will be transferred to this Relationship")
+            .build();
+    public static final Relationship REL_PERMISSION_DENIED = new Relationship.Builder().name("permission.denied")
+            .description("Any FlowFile that could not be fetched from the remote server due to insufficient permissions will be transferred to this Relationship")
+            .build();
 
     public static final Set<Relationship> relationships = Collections.unmodifiableSet(
-            new HashSet<>(Arrays.asList(REL_SUCCESS, REL_FAILURE)));
+            new HashSet<>(Arrays.asList(REL_SUCCESS, REL_FAILURE, REL_COMMS_FAILURE, REL_PERMISSION_DENIED)));
 
     public static final PropertyDescriptor CREDENTIALS_FILE = CredentialPropertyDescriptors.CREDENTIALS_FILE;
     public static final PropertyDescriptor ACCESS_KEY = CredentialPropertyDescriptors.ACCESS_KEY;

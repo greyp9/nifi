@@ -233,13 +233,21 @@ public class FetchS3Object extends AbstractS3Processor {
             if (metadata.getVersionId() != null) {
                 attributes.put("s3.version", metadata.getVersionId());
             }
-        } catch (final IOException | AmazonClientException ioe) {
+        } catch (final AmazonClientException e) {
+            flowFile = session.putAttribute(flowFile, "exception", e.getMessage());
+            getLogger().error("Failed to retrieve S3 Object for {}; routing to failure", new Object[]{flowFile, e});
+            flowFile = session.penalize(flowFile);
+            session.transfer(flowFile, REL_PERMISSION_DENIED);
+            return;
+        } catch (final IOException ioe) {
+            flowFile = session.putAttribute(flowFile, "exception", ioe.getMessage());
             getLogger().error("Failed to retrieve S3 Object for {}; routing to failure", new Object[]{flowFile, ioe});
             flowFile = session.penalize(flowFile);
-            session.transfer(flowFile, REL_FAILURE);
+            session.transfer(flowFile, REL_COMMS_FAILURE);
             return;
         } catch (final FlowFileAccessException ffae) {
             if (ExceptionUtils.indexOfType(ffae, AmazonClientException.class) != -1) {
+                flowFile = session.putAttribute(flowFile, "exception", ffae.getMessage());
                 getLogger().error("Failed to retrieve S3 Object for {}; routing to failure", new Object[]{flowFile, ffae});
                 flowFile = session.penalize(flowFile);
                 session.transfer(flowFile, REL_FAILURE);
