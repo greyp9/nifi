@@ -81,7 +81,8 @@ public class TestStandardResourceReferenceFactory {
     }
 
     private void assertResourceReference(ResourceReference resourceReference, String location) {
-        assertEquals(location, resourceReference.getLocation());
+        final String pathSeparator = System.getProperty("file.separator");
+        assertEquals(location, resourceReference.getLocation().replace(pathSeparator, "/"));
         assertEquals(ResourceType.FILE, resourceReference.getResourceType());
     }
 

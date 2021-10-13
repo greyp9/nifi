@@ -65,7 +65,7 @@ public class FileResourceReference implements ResourceReference {
 
     @Override
     public String getLocation() {
-        return file.getAbsolutePath();
+        return file.getPath();
     }
 
     @Override

@@ -26,22 +26,9 @@ env:
     -Dhttp.keepAlive=false
     -Dmaven.wagon.http.pool=false
   MAVEN_COMMAND: >-
-    mvn package verify
+    mvn test
     -V
-    -D dir-only
-    -D disableXmlReport
-    -nsu
-    -ntp
-    -ff
   MAVEN_PROFILES: >-
-    -P contrib-check
-    -P include-grpc
-  MAVEN_PROJECTS: >-
-    -pl -nifi-assembly
-    -pl -nifi-toolkit/nifi-toolkit-assembly
-    -pl -nifi-registry/nifi-registry-assembly
-    -pl -minifi/minifi-assembly
-    -pl -nifi-system-tests
 
 concurrency:
   group: ${{ github.ref }}
@@ -92,7 +79,6 @@ jobs:
         run: >
           ${{ env.MAVEN_COMMAND }}
           ${{ env.MAVEN_PROFILES }}
-          ${{ env.MAVEN_PROJECTS }}
 
   macos-build-jp:
     timeout-minutes: 120
@@ -138,7 +124,6 @@ jobs:
         run: >-
           ${{ env.MAVEN_COMMAND }}
           ${{ env.MAVEN_PROFILES }}
-          ${{ env.MAVEN_PROJECTS }}
 
   windows-build:
     timeout-minutes: 120
@@ -190,4 +175,3 @@ jobs:
             -Duser.timezone=Europe/Paris
         run: >-
           ${{ env.MAVEN_COMMAND }}
-          ${{ env.MAVEN_PROJECTS }}
