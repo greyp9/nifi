@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DisabledOnOs(OS.WINDOWS)
-@Timeout(value = 5)
+@Timeout(value = 15)
 public class TestLuceneEventIndex {
 
     private final AtomicLong idGenerator = new AtomicLong(0L);
@@ -476,7 +476,7 @@ public class TestLuceneEventIndex {
 
             final QueryResult result = submission.getResult();
             assertNotNull(result);
-            result.awaitCompletion(100, TimeUnit.MILLISECONDS);
+            result.awaitCompletion(1000, TimeUnit.MILLISECONDS);
 
             assertTrue(result.isFinished());
             assertNull(result.getError());
