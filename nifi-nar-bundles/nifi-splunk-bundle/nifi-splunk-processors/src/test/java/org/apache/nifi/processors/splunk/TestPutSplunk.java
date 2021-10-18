@@ -50,7 +50,7 @@ public class TestPutSplunk {
     private TestRunner runner;
     private BlockingQueue<ByteArrayMessage> messages;
     private EventServer eventServer;
-    private final static int DEFAULT_TEST_TIMEOUT_PERIOD = 10000;
+    private final static int DEFAULT_TEST_TIMEOUT_PERIOD = 15000;
     private final static String OUTGOING_MESSAGE_DELIMITER = "\n";
     private static final Charset CHARSET = StandardCharsets.UTF_8;
     private final static int VALID_LARGE_FILE_SIZE = 32768;
@@ -226,7 +226,7 @@ public class TestPutSplunk {
         final String message = "This is message 1\nThis is message 2\nThis is message 3";
 
         runner.enqueue(message);
-        runner.run(1);
+        runner.run(1, true, true, 15000);
         runner.assertAllFlowFilesTransferred(PutSplunk.REL_SUCCESS, 1);
 
         final MockFlowFile mockFlowFile = runner.getFlowFilesForRelationship(PutSplunk.REL_SUCCESS).get(0);

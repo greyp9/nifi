@@ -223,7 +223,7 @@ public class TestZooKeeperStateProvider extends AbstractTestStateProvider {
         assertThrows(StateTooLargeException.class, () -> getProvider().replace(getProvider().getState(componentId), state, componentId));
     }
 
-    @Test(timeout = 5000)
+    @Test(timeout = 15000)
     public void testStateTooLargeExceptionThrownOnReplaceSmallJuteMaxbuffer() throws Exception {
         final Map<String, String> initialState = new HashMap<>();
         final String stateValue = UUID.randomUUID().toString();

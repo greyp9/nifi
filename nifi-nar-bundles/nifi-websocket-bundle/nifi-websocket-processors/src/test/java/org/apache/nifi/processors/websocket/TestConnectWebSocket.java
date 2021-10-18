@@ -162,7 +162,7 @@ public class TestConnectWebSocket extends TestListenWebSocket {
         runner.setProperty(ConnectWebSocket.PROP_WEBSOCKET_CLIENT_SERVICE, serviceId);
         runner.setProperty(ConnectWebSocket.PROP_WEBSOCKET_CLIENT_ID, endpointId);
 
-        runner.run(1, false);
+        runner.run(1, false, true, 15000);
 
         final List<MockFlowFile> flowFilesForRelationship = runner.getFlowFilesForRelationship(ConnectWebSocket.REL_CONNECTED);
         assertEquals(1, flowFilesForRelationship.size());

@@ -476,7 +476,7 @@ public class TestLuceneEventIndex {
 
             final QueryResult result = submission.getResult();
             assertNotNull(result);
-            result.awaitCompletion(1000, TimeUnit.MILLISECONDS);
+            result.awaitCompletion(3000, TimeUnit.MILLISECONDS);
 
             assertTrue(result.isFinished());
             assertNull(result.getError());

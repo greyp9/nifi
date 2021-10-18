@@ -208,10 +208,10 @@ public class TestListenRELP {
         final int port = NetworkUtils.availablePort();
         runner.setProperty(AbstractListenEventBatchingProcessor.PORT, Integer.toString(port));
         // Run Processor and start Dispatcher without shutting down
-        runner.run(1, false, true);
+        runner.run(1, false, true, 15000);
         final byte[] relpMessages = getRELPMessages(frames);
         sendMessages(port, relpMessages, sslContext);
-        runner.run(flowFiles, false, false);
+        runner.run(flowFiles, false, false, 15000);
         runner.assertTransferCount(ListenRELP.REL_SUCCESS, flowFiles);
     }
 

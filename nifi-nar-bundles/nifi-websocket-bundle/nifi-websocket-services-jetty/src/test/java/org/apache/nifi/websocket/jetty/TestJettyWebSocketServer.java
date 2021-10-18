@@ -36,7 +36,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class TestJettyWebSocketServer {
-    private static final long TIMEOUT_SECONDS = 5;
+    private static final long TIMEOUT_SECONDS = 15;
 
     private static final String ROOT_ENDPOINT_ID = "/";
 
