@@ -296,6 +296,15 @@ public class StandardProcessorTestRunner implements TestRunner {
     }
 
     @Override
+    public int getCommits() {
+        int commits = 0;
+        for (final MockProcessSession session : sessionFactory.getCreatedSessions()) {
+            commits += session.isCommitted() ? 1 : 0;
+        }
+        return commits;
+    }
+
+    @Override
     public void assertAllFlowFilesTransferred(final String relationship) {
         for (final MockProcessSession session : sessionFactory.getCreatedSessions()) {
             session.assertAllFlowFilesTransferred(relationship);

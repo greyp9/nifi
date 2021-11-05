@@ -53,6 +53,8 @@ public interface TestRunner {
      */
     ProcessSessionFactory getProcessSessionFactory();
 
+    int getCommits();
+
     /**
      * @return the {@Link ProcessContext} that this <code>TestRunner</code> will
      *         use to invoke the

@@ -238,7 +238,7 @@ public class TestListDatabaseTables {
         stmt.execute("insert into TEST_TABLE1 (id, val1, val2) VALUES (1, 1, 1)");
 
         runner.setProperty(ListDatabaseTables.INCLUDE_COUNT, "true");
-        runner.setProperty(ListDatabaseTables.REFRESH_INTERVAL, "200 millis");
+        runner.setProperty(ListDatabaseTables.REFRESH_INTERVAL, "300 millis");
         runner.run();
         long startTimer = System.currentTimeMillis();
         runner.assertTransferCount(ListDatabaseTables.REL_SUCCESS, 1);
@@ -252,9 +252,9 @@ public class TestListDatabaseTables {
         runner.run();
         long endTimer = System.currentTimeMillis();
         // Expect 1 or 2 tables (whether execution has taken longer than the refresh time)
-        runner.assertTransferCount(ListDatabaseTables.REL_SUCCESS, (endTimer - startTimer > 200) ? 2 : 1);
+        runner.assertTransferCount(ListDatabaseTables.REL_SUCCESS, (endTimer - startTimer > 300) ? 2 : 1);
         results = runner.getFlowFilesForRelationship(ListDatabaseTables.REL_SUCCESS);
-        assertEquals((endTimer - startTimer > 200) ? "2": "0", results.get(0).getAttribute(ListDatabaseTables.DB_TABLE_COUNT));
+        assertEquals((endTimer - startTimer > 300) ? "2": "0", results.get(0).getAttribute(ListDatabaseTables.DB_TABLE_COUNT));
         runner.clearTransferState();
 
         // Now wait longer than the refresh interval and assert the refresh has happened (i.e. the two tables are re-listed)

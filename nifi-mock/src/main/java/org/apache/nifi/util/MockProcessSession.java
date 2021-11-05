@@ -1199,6 +1199,10 @@ public class MockProcessSession implements ProcessSession {
         return result;
     }
 
+    public boolean isCommitted() {
+        return committed;
+    }
+
     /**
      * Assert that the session has been committed
      */
