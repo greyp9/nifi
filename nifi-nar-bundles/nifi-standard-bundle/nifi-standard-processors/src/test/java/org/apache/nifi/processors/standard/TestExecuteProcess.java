@@ -111,7 +111,7 @@ public class TestExecuteProcess {
         runner.setProperty(ExecuteProcess.BATCH_DURATION, "500 millis");
 
         runner.run();
-        Thread.sleep(500);
+        Thread.sleep(600);
         ExecuteProcess processor = (ExecuteProcess) runner.getProcessor();
         try {
             Field executorF = ExecuteProcess.class.getDeclaredField("executor");
