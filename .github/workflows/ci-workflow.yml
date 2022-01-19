@@ -38,6 +38,7 @@ env:
     -P include-grpc
     -P skip-nifi-bin-assembly
   MAVEN_PROJECTS: >-
+    -pl nifi-bootstrap-utils -am
     -pl -nifi-toolkit/nifi-toolkit-assembly
     -pl -nifi-registry/nifi-registry-assembly
     -pl -minifi/minifi-assembly
