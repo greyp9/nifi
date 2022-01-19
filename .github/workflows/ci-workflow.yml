@@ -38,7 +38,10 @@ env:
     -P include-grpc
     -P skip-nifi-bin-assembly
   MAVEN_PROJECTS: >-
-    -pl :nifi-bootstrap-utils -am
+    -pl -nifi-toolkit/nifi-toolkit-assembly
+    -pl -nifi-registry/nifi-registry-assembly
+    -pl -minifi/minifi-assembly
+    -pl -nifi-system-tests
 
 concurrency:
   group: ${{ github.ref }}
@@ -110,4 +113,4 @@ jobs:
       - name: Post Disk Usage
         run: |
           df
-          du
+          du target
