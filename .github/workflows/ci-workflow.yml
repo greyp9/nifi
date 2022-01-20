@@ -22,11 +22,11 @@ env:
     -Xmx2g
     -XX:ReservedCodeCacheSize=1g
     -XX:+UseG1GC
-    -Dorg.slf4j.simpleLogger.defaultLogLevel=INFO
+    -Dorg.slf4j.simpleLogger.defaultLogLevel=WARN
     -Dhttp.keepAlive=false
     -Dmaven.wagon.http.pool=false
   MAVEN_COMMAND: >-
-    mvn clean
+    mvn package verify
     -V
     -D dir-only
     -D disableXmlReport
