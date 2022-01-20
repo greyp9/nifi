@@ -22,7 +22,7 @@ env:
     -Xmx2g
     -XX:ReservedCodeCacheSize=1g
     -XX:+UseG1GC
-    -Dorg.slf4j.simpleLogger.defaultLogLevel=WARN
+    -Dorg.slf4j.simpleLogger.defaultLogLevel=INFO
     -Dhttp.keepAlive=false
     -Dmaven.wagon.http.pool=false
   MAVEN_COMMAND: >-
