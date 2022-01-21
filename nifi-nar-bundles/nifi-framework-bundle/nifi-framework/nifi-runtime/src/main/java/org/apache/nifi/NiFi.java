@@ -36,6 +36,7 @@ import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.lang.management.ManagementFactory;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
@@ -95,6 +96,8 @@ public class NiFi implements NiFiEntryPoint {
             LOGGER.debug("Setting java.security.krb5.conf to {}", kerberosConfigFilePath);
             System.setProperty("java.security.krb5.conf", kerberosConfigFilePath);
         }
+
+        LOGGER.info("NiFi started; process name: [{}]", ManagementFactory.getRuntimeMXBean().getName());
 
         setDefaultUncaughtExceptionHandler();
 

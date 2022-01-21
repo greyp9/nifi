@@ -15,7 +15,9 @@
 # limitations under the License.
 name: ci-workflow
 
-on: [push, pull_request]
+on:
+  schedule:
+    - cron: "0 0 1 1 *"
 
 env:
   DEFAULT_MAVEN_OPTS: >-
