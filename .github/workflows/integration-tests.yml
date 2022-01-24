@@ -43,7 +43,7 @@ env:
 jobs:
 
   macos:
-    if: github.repository_owner == 'not-greyp9'
+    if: github.repository_owner == 'greyp9'
     timeout-minutes: 120
     runs-on: macos-latest
     name: MacOS Java 8
