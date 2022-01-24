@@ -671,10 +671,8 @@ public class FlowSynchronizationIT extends NiFiSystemIT {
 
         getNifiClient().getProcessorClient().startProcessor(countFlowFiles);
 
-
         // Disconnect Node 2. Switch client to direct requests to Node 2 so that we can update the node while it's disconnected.
         disconnectNode(2);
-
         switchClientToNode(2);
 
         generateFlowFile.setDisconnectedNodeAcknowledged(true);
@@ -836,17 +834,7 @@ public class FlowSynchronizationIT extends NiFiSystemIT {
     private void disconnectNode(final int nodeIndex) throws NiFiClientException, IOException, InterruptedException {
         final NodeEntity nodeEntity = getNodeEntity(nodeIndex);
         nodeEntity.getNode().setStatus(NodeConnectionState.DISCONNECTING.name());
-
-        for (int retries = 0; (retries < 5); ++retries) {
-            try {
-                getNifiClient().getControllerClient().disconnectNode(nodeEntity.getNode().getNodeId(), nodeEntity);
-                logger.info("disconnectNode({}), ATTEMPT({}), SUCCESS", nodeEntity.getNode().getNodeId(), retries);
-                break;
-            } catch (Exception e) {
-                logger.error("disconnectNode({}), ATTEMPT({}), FAILURE", nodeEntity.getNode().getNodeId(), retries);
-                logger.error("disconnectNode(), FAILURE", e);
-            }
-        }
+        getNifiClient().getControllerClient().disconnectNode(nodeEntity.getNode().getNodeId(), nodeEntity);
 
         waitForNodeState(nodeIndex, NodeConnectionState.DISCONNECTED);
         waitForCoordinatorElected();
@@ -891,19 +879,16 @@ public class FlowSynchronizationIT extends NiFiSystemIT {
     private void waitForNodeState(final int nodeIndex, final NodeConnectionState... nodeStates) throws InterruptedException {
         waitFor(() -> {
             try {
-                logger.info("waitForNodeState():A {} {}", nodeIndex, nodeStates);
                 final NodeEntity nodeEntity = getNodeEntity(nodeIndex);
                 final String status = nodeEntity.getNode().getStatus();
                 for (final NodeConnectionState state : nodeStates) {
                     if (state.name().equals(status)) {
-                        logger.info("waitForNodeState():TRUE");
                         return true;
                     }
                 }
-                logger.info("waitForNodeState():FALSE");
+
                 return false;
             } catch (final Exception e) {
-                logger.info("waitForNodeState():FALSE", e);
                 return false;
             }
         });

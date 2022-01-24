@@ -30,13 +30,14 @@ env:
     -ntp
     -ff
   MAVEN_BUILD_ARGUMENTS: >-
+    clean
     install
     -D skipTests
     -am
   MAVEN_RUN_ARGUMENTS: >-
     clean
     test
-    -Dtest=FlowSynchronizationIT
+    -Dtest=FlowSynchronizationIT,ClusterIT
   MAVEN_PROJECTS: >-
     -pl :nifi-system-test-suite
 

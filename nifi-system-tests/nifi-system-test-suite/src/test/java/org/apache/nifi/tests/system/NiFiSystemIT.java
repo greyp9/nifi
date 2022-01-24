@@ -70,6 +70,19 @@ public abstract class NiFiSystemIT {
     @Rule(order = Integer.MIN_VALUE)
     public TestWatcher quarantineRule = new TestWatcher() {
         @Override
+        protected void succeeded(Description description) {
+            super.succeeded(description);
+
+            final String testName = description.getMethodName();
+            try {
+                final File dir = quarantineTroubleshootingInfo("SUCCESS-" + testName, new Exception("NO_EXCEPTION"));
+                logger.info("Test success for <{}>. Successfully wrote troubleshooting info to {}", testName, dir.getAbsolutePath());
+            } catch (final Exception e) {
+                logger.error("Failed to quarantine troubleshooting info for test " + testName, e);
+            }
+        }
+
+        @Override
         protected void failed(final Throwable t, final Description description) {
             final String testName = description.getMethodName();
             try {
@@ -192,6 +205,7 @@ public abstract class NiFiSystemIT {
                 final ClusteSummaryEntity clusterSummary = client.getFlowClient().getClusterSummary();
                 final int connectedNodeCount = clusterSummary.getClusterSummary().getConnectedNodeCount();
                 if (connectedNodeCount == expectedNumberOfNodes) {
+                    logger.info("Wait successful, {} nodes connected", expectedNumberOfNodes);
                     return;
                 }
 
@@ -311,7 +325,7 @@ public abstract class NiFiSystemIT {
     }
 
     protected void waitFor(final ExceptionalBooleanSupplier condition) throws InterruptedException {
-        waitFor(condition, 10L);
+        waitFor(condition, 100L);
     }
 
     protected void waitFor(final ExceptionalBooleanSupplier condition, final long delayMillis) throws InterruptedException {

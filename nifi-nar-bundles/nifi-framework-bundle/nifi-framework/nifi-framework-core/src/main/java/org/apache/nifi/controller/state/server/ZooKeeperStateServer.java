@@ -183,16 +183,24 @@ public class ZooKeeperStateServer extends ZooKeeperServerMain {
                 }
             }
 
-            if (connectionFactory != null) {
-                connectionFactory.shutdown();
-            }
-
             if (quorumPeer != null && quorumPeer.isRunning()) {
                 quorumPeer.shutdown();
             }
 
+            if (connectionFactory != null) {
+                try {
+                    connectionFactory.shutdown();
+                } catch (Exception e) {
+                    logger.warn("connectionFactory.shutdown()::", e);
+                }
+            }
+
             if (embeddedZkServer != null && embeddedZkServer.isRunning()) {
-                embeddedZkServer.shutdown();
+                try {
+                    embeddedZkServer.shutdown();
+                } catch (Exception e) {
+                    logger.warn("embeddedZkServer.shutdown()::", e);
+                }
             }
 
             if (datadirCleanupManager != null) {

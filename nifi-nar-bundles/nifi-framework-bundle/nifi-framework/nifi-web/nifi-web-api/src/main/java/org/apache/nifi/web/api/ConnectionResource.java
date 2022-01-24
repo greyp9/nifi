@@ -333,7 +333,6 @@ public class ConnectionResource extends ApplicationResource {
             )
             @PathParam("id") final String id) throws InterruptedException {
 
-
         if (isReplicateRequest()) {
             return replicate(HttpMethod.DELETE);
         } else if (isDisconnectedFromCluster()) {
@@ -371,7 +370,6 @@ public class ConnectionResource extends ApplicationResource {
                     return generateOkResponse(entity).build();
                 }
         );
-
     }
 
     // setters

@@ -24,6 +24,7 @@ import org.apache.nifi.NiFiServer;
 import org.apache.nifi.bundle.Bundle;
 import org.apache.nifi.bundle.BundleDetails;
 import org.apache.nifi.controller.DecommissionTask;
+import org.apache.nifi.controller.FlowController;
 import org.apache.nifi.controller.UninheritableFlowException;
 import org.apache.nifi.controller.serialization.FlowSerializationException;
 import org.apache.nifi.controller.serialization.FlowSynchronizationException;
@@ -163,6 +164,7 @@ public class JettyServer implements NiFiServer, ExtensionUiLoader {
     private ExtensionMapping extensionMapping;
     private NarAutoLoader narAutoLoader;
     private DiagnosticsFactory diagnosticsFactory;
+    private FlowController flowController;
     private SslContextFactory.Server sslContextFactory;
     private DecommissionTask decommissionTask;
     private StatusHistoryDumpFactory statusHistoryDumpFactory;
@@ -1064,6 +1066,7 @@ public class JettyServer implements NiFiServer, ExtensionUiLoader {
                 diagnosticsFactory = webApplicationContext.getBean("diagnosticsFactory", DiagnosticsFactory.class);
                 decommissionTask = webApplicationContext.getBean("decommissionTask", DecommissionTask.class);
                 statusHistoryDumpFactory = webApplicationContext.getBean("statusHistoryDumpFactory", StatusHistoryDumpFactory.class);
+                flowController = webApplicationContext.getBean("flowController", FlowController.class);
             }
 
             // ensure the web document war was loaded and provide the extension mapping
@@ -1244,6 +1247,14 @@ public class JettyServer implements NiFiServer, ExtensionUiLoader {
 
     @Override
     public void stop() {
+        try {
+            if (flowController != null) {
+                flowController.shutdown(false);
+            }
+        } catch (Exception ex) {
+            logger.warn("Failed to stop flow controller", ex);
+        }
+
         try {
             server.stop();
         } catch (Exception ex) {
