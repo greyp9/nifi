@@ -80,7 +80,7 @@ jobs:
           ${{ env.MAVEN_RUN_ARGUMENTS }}
           ${{ env.MAVEN_PROJECTS }}
       - name: Upload Troubleshooting Logs
-        if: ${{ failure() }}
+        if: always()
         uses: actions/upload-artifact@v2
         with:
           name: macos-latest-troubleshooting-logs
