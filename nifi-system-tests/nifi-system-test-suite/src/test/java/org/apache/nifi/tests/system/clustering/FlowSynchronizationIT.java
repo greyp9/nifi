@@ -683,7 +683,7 @@ public class FlowSynchronizationIT extends NiFiSystemIT {
         connection.setDisconnectedNodeAcknowledged(true);
 
         // Delete the CountFlowFiles processor, and countB and countC services, disable A.
-        getNifiClient().getProcessorClient().stopProcessor(countFlowFiles);
+        getClientUtil().stopProcessor(countFlowFiles);
         getNifiClient().getConnectionClient().deleteConnection(connection);
         getNifiClient().getProcessorClient().deleteProcessor(countFlowFiles);
         getClientUtil().disableControllerServices("root", true);
@@ -834,14 +834,23 @@ public class FlowSynchronizationIT extends NiFiSystemIT {
     private void disconnectNode(final int nodeIndex) throws NiFiClientException, IOException, InterruptedException {
         final NodeEntity nodeEntity = getNodeEntity(nodeIndex);
         nodeEntity.getNode().setStatus(NodeConnectionState.DISCONNECTING.name());
-        getNifiClient().getControllerClient().disconnectNode(nodeEntity.getNode().getNodeId(), nodeEntity);
+
+        for (int retries = 0; (retries < 3); ++retries) {
+            try {
+                getNifiClient().getControllerClient().disconnectNode(nodeEntity.getNode().getNodeId(), nodeEntity);
+                break;
+            } catch (Exception e) {
+                logger.error(e.getMessage(), e);
+                Thread.sleep(1000L);
+            }
+        }
 
         waitForNodeState(nodeIndex, NodeConnectionState.DISCONNECTED);
         waitForCoordinatorElected();
     }
 
     private void waitForCoordinatorElected() throws InterruptedException {
-        waitFor(() -> isCoordinatorElected());
+        waitFor(this::isCoordinatorElected);
     }
 
     private boolean isCoordinatorElected() throws NiFiClientException, IOException {

@@ -18,6 +18,9 @@ name: system-tests
 on:
   schedule:
     - cron: "0 0 1 1 *"
+  push:
+    branches:
+      - 'NIFI-9233-A'
 
 env:
   DEFAULT_MAVEN_OPTS: >-
