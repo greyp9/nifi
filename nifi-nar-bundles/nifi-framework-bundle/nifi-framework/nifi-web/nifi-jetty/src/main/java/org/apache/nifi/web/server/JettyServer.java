@@ -1247,13 +1247,13 @@ public class JettyServer implements NiFiServer, ExtensionUiLoader {
 
     @Override
     public void stop() {
-        try {
-            if (flowController != null) {
-                flowController.shutdown(false);
-            }
-        } catch (Exception ex) {
-            logger.warn("Failed to stop flow controller", ex);
-        }
+//        try {
+//            if (flowController != null) {
+//                flowController.shutdown(false);
+//            }
+//        } catch (Exception ex) {
+//            logger.warn("Failed to stop flow controller", ex);
+//        }
 
         try {
             server.stop();

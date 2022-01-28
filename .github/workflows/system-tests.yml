@@ -21,6 +21,7 @@ on:
   push:
     branches:
       - 'NIFI-9233-A'
+      - 'NIFI-9233-Z'
 
 env:
   DEFAULT_MAVEN_OPTS: >-

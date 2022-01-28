@@ -37,7 +37,7 @@ env:
   MAVEN_RUN_ARGUMENTS: >-
     clean
     test
-    -Dtest=FlowSynchronizationIT,ClusterIT
+    -Dtest=FlowSynchronizationIT,ClusterIT,FlowFileRestorationIT
   MAVEN_PROJECTS: >-
     -pl :nifi-system-test-suite
 
@@ -84,7 +84,9 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: ubuntu-latest-troubleshooting-logs
-          path: "**/target/troubleshooting/"
+          path: |
+            "**/target/surefire-reports/"
+            "**/target/troubleshooting/"
           retention-days: 7
 
   macos:
@@ -129,5 +131,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: macos-latest-troubleshooting-logs
-          path: "**/target/troubleshooting/"
+          path: |
+            "**/target/surefire-reports/"
+            "**/target/troubleshooting/"
           retention-days: 7
