@@ -25,6 +25,8 @@ import org.apache.nifi.web.api.entity.ConnectionEntity;
 import org.apache.nifi.web.api.entity.ProcessorEntity;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -39,7 +41,18 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(Parameterized.class)
 public class FlowFileRestorationIT extends NiFiSystemIT {
+
+    @Parameterized.Parameters
+    public static Object[][] data() {
+        return new Object[1][0];
+    }
+
+    @Override
+    protected boolean isDestroyEnvironmentAfterEachTest() {
+        return true;
+    }
 
     @Test
     public void testDataInMissingQueueRestoredWhenQueueRestored() throws NiFiClientException, IOException, InterruptedException {
@@ -57,6 +70,8 @@ public class FlowFileRestorationIT extends NiFiSystemIT {
         final byte[] flowFileContents = getFlowFileContents(connection.getId(), 0);
 
         assertEquals(1024, flowFileContents.length);
+
+        Thread.sleep(1000L);  // provide enough time for flow changes to be committed (SaveReportingTask every 500ms)
 
         final NiFiInstance nifiInstance = getNiFiInstance();
         nifiInstance.stop();
@@ -78,6 +93,8 @@ public class FlowFileRestorationIT extends NiFiSystemIT {
         } catch (final NiFiClientException nfce) {
             // Expected because the connection no longer exists.
         }
+
+        Thread.sleep(1000L);  // provide enough time for flow changes to be committed (SaveReportingTask every 500ms)
 
         // Stop the instance, restore the flow.xml.gz, and restart
         nifiInstance.stop();

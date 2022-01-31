@@ -101,6 +101,9 @@
     <logger name="org.apache.nifi.controller.repository.StandardProcessSession" level="WARN" />
 
 
+    <logger name="org.apache.nifi.controller.StandardFlowService" level="TRACE" />
+
+
     <logger name="org.apache.zookeeper.ClientCnxn" level="ERROR" />
     <logger name="org.apache.zookeeper.server.NIOServerCnxn" level="ERROR" />
     <logger name="org.apache.zookeeper.server.NIOServerCnxnFactory" level="ERROR" />

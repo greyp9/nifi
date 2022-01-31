@@ -246,12 +246,14 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
 
     @Override
     public void saveFlowChanges(final TimeUnit delayUnit, final long delay) {
+        logger.trace("[NIFI-9233:saveFlowChanges([{}], [{}]]", delayUnit, delay);
         final boolean archiveEnabled = nifiProperties.isFlowConfigurationArchiveEnabled();
         saveFlowChanges(delayUnit, delay, archiveEnabled);
     }
 
     @Override
     public void saveFlowChanges(final TimeUnit delayUnit, final long delay, final boolean archive) {
+        logger.trace("[NIFI-9233:saveFlowChanges([{}], [{}]], [{}]]", delayUnit, delay, archive);
         final Calendar saveTime = Calendar.getInstance();
         final long delayInMs = TimeUnit.MILLISECONDS.convert(delay, delayUnit);
         int finalDelayMs = 500; //default to 500 ms.
@@ -283,7 +285,7 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
             running.set(true);
 
             final ScheduledExecutorService newExecutor = new FlowEngine(2, "Flow Service Tasks");
-            newExecutor.scheduleWithFixedDelay(new SaveReportingTask(), 0L, 500L, TimeUnit.MILLISECONDS);
+            newExecutor.scheduleWithFixedDelay(new SaveReportingTask(saveHolder), 0L, 500L, TimeUnit.MILLISECONDS);
             this.executor.set(newExecutor);
 
             if (configuredForClustering) {
@@ -1093,6 +1095,11 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
     }
 
     private class SaveReportingTask implements Runnable {
+        private final AtomicReference<SaveHolder> saveHolder;
+
+        public SaveReportingTask(AtomicReference<SaveHolder> saveHolder) {
+            this.saveHolder = saveHolder;
+        }
 
         @Override
         public void run() {
@@ -1106,32 +1113,36 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
             }
 
             try {
+                if (logger.isTraceEnabled()) {
+                    logger.trace("[NIFI-9233:SaveReportingTask:1] BEFORE saveHolder.get()");
+                }
+
                 //Hang onto the SaveHolder here rather than setting it to null because if the save fails we will try again
-                final SaveHolder holder = StandardFlowService.this.saveHolder.get();
+                final SaveHolder holder = saveHolder.get();
                 if (holder == null) {
                     return;
                 }
 
                 if (logger.isTraceEnabled()) {
-                    logger.trace("Save request time {} // Current time {}", holder.saveTime.getTime(), new Date());
+                    logger.trace("[NIFI-9233:SaveReportingTask:2] Save request time {} // Current time {}", holder.saveTime.getTime(), new Date());
                 }
 
                 final Calendar now = Calendar.getInstance();
                 if (holder.saveTime.before(now)) {
                     if (logger.isTraceEnabled()) {
-                        logger.trace("Waiting for write lock and then will save");
+                        logger.trace("[NIFI-9233:SaveReportingTask:3] Waiting for write lock and then will save");
                     }
                     final boolean lockObtained = writeLock.tryLock(10, TimeUnit.MILLISECONDS);
                     if (!lockObtained) {
-                        logger.trace("Could not obtain lock so will not write flow to disk during this iteration.");
+                        logger.trace("[NIFI-9233:SaveReportingTask:4] Could not obtain lock so will not write flow to disk during this iteration.");
                         return;
                     }
                     try {
                         dao.save(controller, holder.shouldArchive);
                         // Nulling it out if it is still set to our current SaveHolder.  Otherwise leave it alone because it means
                         // another save is already pending.
-                        final boolean noSavePending = StandardFlowService.this.saveHolder.compareAndSet(holder, null);
-                        logger.info("Saved flow controller {} // Another save pending = {}", controller, !noSavePending);
+                        final boolean noSavePending = saveHolder.compareAndSet(holder, null);
+                        logger.info("[NIFI-9233:SaveReportingTask:5]  Saved flow controller {} // Another save pending = {}", controller, !noSavePending);
                     } finally {
                         writeLock.unlock();
                     }
@@ -1153,7 +1164,7 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
         }
     }
 
-    private class SaveHolder {
+    private static class SaveHolder {
 
         private final Calendar saveTime;
         private final boolean shouldArchive;

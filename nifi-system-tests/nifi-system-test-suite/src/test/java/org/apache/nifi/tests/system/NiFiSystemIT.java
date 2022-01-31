@@ -65,7 +65,7 @@ public abstract class NiFiSystemIT {
     @Rule
     public TestName name = new TestName();
     @Rule
-    public Timeout defaultTimeout = new Timeout(5, TimeUnit.MINUTES);
+    public Timeout defaultTimeout = new Timeout(3, TimeUnit.MINUTES);
 
     @Rule(order = Integer.MIN_VALUE)
     public TestWatcher quarantineRule = new TestWatcher() {
