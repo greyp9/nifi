@@ -85,7 +85,7 @@ public class ClassloaderIsolationKeyIT extends NiFiSystemIT {
     }
 
 
-    @Test
+//    @Test
     public void testClassloaderChanges() throws NiFiClientException, IOException, InterruptedException {
         final ProcessorEntity generate = getClientUtil().createProcessor("GenerateFlowFile");
         final ProcessorEntity firstCounter = getClientUtil().createProcessor("WriteFlowFileCountToFile");
