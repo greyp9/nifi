@@ -37,7 +37,7 @@ env:
   MAVEN_RUN_ARGUMENTS: >-
     clean
     test
-    -Dtest=FlowSynchronizationIT,ClusterIT,FlowFileRestorationIT
+    -Dtest=FlowSynchronizationIT,ClusterIT,FlowFileRestorationIT,BatchFlowBetweenGroupsIT
   MAVEN_PROJECTS: >-
     -pl :nifi-system-test-suite
 
