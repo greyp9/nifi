@@ -1151,7 +1151,7 @@ public class NiFiClientUtil {
         verificationRequest.setRequest(requestDto);
 
         VerifyConfigRequestEntity results = nifiClient.getProcessorClient().submitConfigVerificationRequest(verificationRequest);
-        while (!results.getRequest().isComplete()) {
+        while ((!results.getRequest().isComplete()) || (results.getRequest().getResults() == null)) {  // st289/macos - 2022-02-09 16:59:30:084
             Thread.sleep(50L);
             results = nifiClient.getProcessorClient().getConfigVerificationRequest(processorId, results.getRequest().getRequestId());
         }
@@ -1182,7 +1182,7 @@ public class NiFiClientUtil {
         verificationRequest.setRequest(requestDto);
 
         VerifyConfigRequestEntity results = nifiClient.getControllerServicesClient().submitConfigVerificationRequest(verificationRequest);
-        while (!results.getRequest().isComplete()) {
+        while ((!results.getRequest().isComplete()) || (results.getRequest().getResults() == null)) {  // st289/macos - 2022-02-09 16:59:30:084
             Thread.sleep(50L);
             results = nifiClient.getControllerServicesClient().getConfigVerificationRequest(serviceId, results.getRequest().getRequestId());
         }
@@ -1203,9 +1203,20 @@ public class NiFiClientUtil {
         verificationRequest.setRequest(requestDto);
 
         VerifyConfigRequestEntity results = nifiClient.getReportingTasksClient().submitConfigVerificationRequest(verificationRequest);
-        while (!results.getRequest().isComplete()) {
-            Thread.sleep(50L);
+        while ((!results.getRequest().isComplete()) || (results.getRequest().getResults() == null)) {  // st289/macos - 2022-02-09 16:59:30:084
+            try {
+                Thread.sleep(50L);
+            } catch (InterruptedException e) {
+                logger.warn("Interrupted while waiting for another chance to verify.");
+                throw e;
+            }
             results = nifiClient.getReportingTasksClient().getConfigVerificationRequest(taskId, results.getRequest().getRequestId());
+        }
+        if (results.getRequest().getResults() == null) {
+            final VerifyConfigRequestDTO request = results.getRequest();
+            logger.warn("BAD_RESPONSE::[{}][{}][{}][{}][{}]",
+                    request.getComponentId(), request.getRequestId(), request.getAttributes().entrySet(),
+                    request.getFailureReason(), request.getProperties().entrySet());
         }
 
         nifiClient.getReportingTasksClient().deleteConfigVerificationRequest(taskId, results.getRequest().getRequestId());

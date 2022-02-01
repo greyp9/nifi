@@ -102,6 +102,8 @@ public class ProvenanceRepositoryIT extends NiFiSystemIT {
         getClientUtil().setAutoTerminatedRelationships(terminate, "success");
         getClientUtil().createConnection(generateFlowFile, terminate, "success");
 
+        Thread.sleep(1000L);  // st379/macos - 2022-02-16 11:08:48:773, 2022-02-16 11:09:19:122
+
         generateFlowFile = getNifiClient().getProcessorClient().startProcessor(generateFlowFile);
 
         ProvenanceSearchValueDTO searchValueDto = new ProvenanceSearchValueDTO();
@@ -151,6 +153,8 @@ public class ProvenanceRepositoryIT extends NiFiSystemIT {
         final ProcessorEntity terminate = getClientUtil().createProcessor("TerminateFlowFile");
         getClientUtil().setAutoTerminatedRelationships(terminate, "success");
         getClientUtil().createConnection(generateFlowFile, terminate, "success");
+
+        Thread.sleep(1000L);  // st379/macos - 2022-02-16 11:08:48:773, 2022-02-16 11:09:19:122
 
         generateFlowFile = getNifiClient().getProcessorClient().startProcessor(generateFlowFile);
 

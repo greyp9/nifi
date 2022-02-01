@@ -18,7 +18,8 @@ name: system-tests
 on:
   # Run every day at 00:00
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 */2 * * *"
+  push:
 
 env:
   DEFAULT_MAVEN_OPTS: >-
@@ -82,11 +83,14 @@ jobs:
           ${{ env.MAVEN_RUN_ARGUMENTS }}
           ${{ env.MAVEN_PROJECTS }}
       - name: Upload Troubleshooting Logs
-        if: ${{ failure() }}
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v2
         with:
           name: ubuntu-latest-troubleshooting-logs
-          path: "**/target/troubleshooting/"
+          path: |
+            nifi-system-tests/nifi-system-test-suite/target/failsafe-reports/**/*.txt
+            nifi-system-tests/nifi-system-test-suite/target/surefire-reports/**/*
+            nifi-system-tests/nifi-system-test-suite/target/troubleshooting/**/*
           retention-days: 7
 
   macos:
@@ -126,9 +130,12 @@ jobs:
           ${{ env.MAVEN_RUN_ARGUMENTS }}
           ${{ env.MAVEN_PROJECTS }}
       - name: Upload Troubleshooting Logs
-        if: ${{ failure() }}
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v2
         with:
           name: macos-latest-troubleshooting-logs
-          path: "**/target/troubleshooting/"
+          path: |
+            nifi-system-tests/nifi-system-test-suite/target/failsafe-reports/**/*.txt
+            nifi-system-tests/nifi-system-test-suite/target/surefire-reports/**/*
+            nifi-system-tests/nifi-system-test-suite/target/troubleshooting/**/*
           retention-days: 7

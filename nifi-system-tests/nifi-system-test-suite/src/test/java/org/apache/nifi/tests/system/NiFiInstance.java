@@ -79,6 +79,8 @@ public interface NiFiInstance {
      */
     Properties getProperties() throws IOException;
 
+    String getProperty(String propertyName) throws IOException;
+
     /**
      * @return the root directory for the instance
      */

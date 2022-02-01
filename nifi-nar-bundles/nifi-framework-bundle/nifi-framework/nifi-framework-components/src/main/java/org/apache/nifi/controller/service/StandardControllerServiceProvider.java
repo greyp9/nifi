@@ -234,6 +234,12 @@ public class StandardControllerServiceProvider implements ControllerServiceProvi
     }
 
     private void enableControllerServices(final Collection<ControllerServiceNode> serviceNodes, final CompletableFuture<Void> completableFuture) {
+//        synchronized (this) {
+//            enableControllerServicesInner(serviceNodes, completableFuture);
+//        }
+//    }
+//
+//    private void enableControllerServicesInner(final Collection<ControllerServiceNode> serviceNodes, final CompletableFuture<Void> completableFuture) {
         // validate that we are able to start all of the services.
         for (final ControllerServiceNode controllerServiceNode : serviceNodes) {
             if (completableFuture.isCancelled()) {
@@ -369,6 +375,12 @@ public class StandardControllerServiceProvider implements ControllerServiceProvi
     }
 
     private void disableControllerServices(final Collection<ControllerServiceNode> serviceNodes, final CompletableFuture<Void> future) {
+//        synchronized (this) {
+//            disableControllerServicesInner(serviceNodes, future);
+//        }
+//    }
+//
+//    private void disableControllerServicesInner(final Collection<ControllerServiceNode> serviceNodes, final CompletableFuture<Void> future) {
         final Set<ControllerServiceNode> serviceNodeSet = new HashSet<>(serviceNodes);
 
         // Verify that for each Controller Service given, any service that references it is either disabled or is also in the given collection

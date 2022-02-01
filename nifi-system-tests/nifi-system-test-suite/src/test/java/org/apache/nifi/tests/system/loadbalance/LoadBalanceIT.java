@@ -16,6 +16,7 @@
  */
 package org.apache.nifi.tests.system.loadbalance;
 
+import org.apache.nifi.cluster.coordination.node.NodeConnectionState;
 import org.apache.nifi.controller.queue.LoadBalanceCompression;
 import org.apache.nifi.controller.queue.LoadBalanceStrategy;
 import org.apache.nifi.scheduling.ExecutionNode;
@@ -36,6 +37,8 @@ import org.apache.nifi.web.api.entity.FlowFileEntity;
 import org.apache.nifi.web.api.entity.ProcessorEntity;
 import org.junit.Assert;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -49,6 +52,8 @@ import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
 
 public class LoadBalanceIT extends NiFiSystemIT {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
+
     @Override
     protected NiFiInstanceFactory getInstanceFactory() {
         return new SpawnedClusterNiFiInstanceFactory(
@@ -98,7 +103,8 @@ public class LoadBalanceIT extends NiFiSystemIT {
         });
 
         // Wait until load balancing is complete
-        waitFor(() -> isConnectionDoneLoadBalancing(connection.getId()));
+        waitFor(() -> isConnectionDoneLoadBalancing(connection.getId()));  // st311/ubuntu - 2022-02-11 07:00:39:197
+        // st379/ubuntu - 2022-02-16 11:16:48,151
 
         // Ensure that the FlowFiles are evenly distributed between the nodes.
         final ConnectionStatusEntity statusEntity = getConnectionStatus(connection.getId());
@@ -132,7 +138,9 @@ public class LoadBalanceIT extends NiFiSystemIT {
         // Wait until all 20 FlowFiles are queued up.
         waitFor(() -> {
             final ConnectionStatusEntity statusEntity = getConnectionStatus(connection.getId());
-            return statusEntity.getConnectionStatus().getAggregateSnapshot().getFlowFilesQueued() == 20;
+            final int flowFilesQueued = statusEntity.getConnectionStatus().getAggregateSnapshot().getFlowFilesQueued();
+            logger.trace("FlowFilesQueued = [{}]", flowFilesQueued);
+            return flowFilesQueued == 20;
         });
 
         // Wait until load balancing is complete
@@ -179,6 +187,9 @@ public class LoadBalanceIT extends NiFiSystemIT {
 
         // Round Robin between nodes. This should result in 10 FlowFiles on each node.
         getClientUtil().updateConnectionLoadBalancing(connection, LoadBalanceStrategy.PARTITION_BY_ATTRIBUTE, LoadBalanceCompression.DO_NOT_COMPRESS, "number");
+
+        Thread.sleep(3000L);  // st354/macos - 2022-02-14 16:44:32:225
+        // Processor ... cannot be started because its validation is still being performed
 
         // Queue 100 FlowFiles. 10 with number=0, 10 with number=1, 10 with number=2, etc. to up 10 with number=9
         for (int i=1; i <= 10; i++) {
@@ -254,9 +265,9 @@ public class LoadBalanceIT extends NiFiSystemIT {
         final String nodeId = firstNodeDto.getNodeId();
 
         getClientUtil().disconnectNode(nodeId);
+        waitForNodeStatus(firstNodeDto, NodeConnectionState.DISCONNECTED.name());
         getClientUtil().offloadNode(nodeId);
-
-        waitFor(this::isNodeOffloaded);
+        waitForNodeStatus(firstNodeDto, NodeConnectionState.OFFLOADED.name());
 
         assertEquals(20, getQueueSize(connection.getId()));
         assertEquals(20 * 1024 * 1024, getQueueBytes(connection.getId()));
@@ -283,32 +294,11 @@ public class LoadBalanceIT extends NiFiSystemIT {
         return connectionStatusDto.getAggregateSnapshot().getBytesQueued().longValue();
     }
 
-
-    private boolean isNodeOffloaded() {
-        final ClusterEntity clusterEntity;
-        try {
-            clusterEntity = getNifiClient().getControllerClient().getNodes();
-        } catch (final Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-
-        final Collection<NodeDTO> nodeDtos = clusterEntity.getCluster().getNodes();
-
-        for (final NodeDTO dto : nodeDtos) {
-            final String status = dto.getStatus();
-            if (status.equalsIgnoreCase("OFFLOADED")) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private boolean isConnectionDoneLoadBalancing(final String connectionId) {
         try {
             final ConnectionEntity connectionEntity = getNifiClient().getConnectionClient().getConnection(connectionId);
             final String loadBalanceStatus = connectionEntity.getComponent().getLoadBalanceStatus();
+            logger.trace("LoadBalanceStatus = [{}]", loadBalanceStatus);
             return ConnectionDTO.LOAD_BALANCE_INACTIVE.equals(loadBalanceStatus);
         } catch (Exception e) {
             e.printStackTrace();

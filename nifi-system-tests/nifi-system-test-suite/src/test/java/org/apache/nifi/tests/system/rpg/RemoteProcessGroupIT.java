@@ -104,6 +104,10 @@ public class RemoteProcessGroupIT extends NiFiSystemIT {
         final ConnectionEntity portToCount = getClientUtil().createConnection(util.createConnectableDTO(port), util.createConnectableDTO(count), "");
 
         getNifiClient().getInputPortClient().startInputPort(port);
+
+        Thread.sleep(3000L);  // st297/macos - 2022-02-10 04:30:52:205Z
+                              // st305/macos
+
         getNifiClient().getProcessorClient().startProcessor(generateFlowFile);
         getNifiClient().getRemoteProcessGroupClient().startTransmitting(rpg);
 

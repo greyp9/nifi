@@ -46,6 +46,7 @@ import org.apache.nifi.toolkit.cli.impl.client.nifi.VersionsClient;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.client.ClientProperties;
 import org.glassfish.jersey.jackson.internal.jackson.jaxrs.json.JacksonJaxbJsonProvider;
+import org.glassfish.jersey.logging.LoggingFeature;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
@@ -109,6 +110,8 @@ public class JerseyNiFiClient implements NiFiClient {
         final ClientConfig jerseyClientConfig = new ClientConfig();
         jerseyClientConfig.property(ClientProperties.CONNECT_TIMEOUT, connectTimeout);
         jerseyClientConfig.property(ClientProperties.READ_TIMEOUT, readTimeout);
+        // NIFI-9233 / https://eclipse-ee4j.github.io/jersey.github.io/documentation/latest/index.html
+        jerseyClientConfig.property(LoggingFeature.LOGGING_FEATURE_VERBOSITY_CLIENT, LoggingFeature.Verbosity.PAYLOAD_ANY);
         jerseyClientConfig.register(jacksonJaxbJsonProvider());
         clientBuilder.withConfig(jerseyClientConfig);
         this.client = clientBuilder.build();

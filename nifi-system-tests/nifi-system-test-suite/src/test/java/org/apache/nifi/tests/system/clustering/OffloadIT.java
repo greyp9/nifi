@@ -17,6 +17,7 @@
 
 package org.apache.nifi.tests.system.clustering;
 
+import org.apache.nifi.cluster.coordination.node.NodeConnectionState;
 import org.apache.nifi.tests.system.NiFiInstanceFactory;
 import org.apache.nifi.tests.system.NiFiSystemIT;
 import org.apache.nifi.tests.system.SpawnedClusterNiFiInstanceFactory;
@@ -31,7 +32,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.Collections;
 
 public class OffloadIT extends NiFiSystemIT {
@@ -75,34 +75,22 @@ public class OffloadIT extends NiFiSystemIT {
         final NodeDTO node2Dto = getNodeDTO(5672);
 
         disconnectNode(node2Dto);
+        waitForNodeStatus(node2Dto, NodeConnectionState.DISCONNECTED.name());
+
+        Thread.sleep(1000L);
 
         final String nodeId = node2Dto.getNodeId();
         getClientUtil().offloadNode(nodeId);
-        waitFor(this::isNodeOffloaded);
+        waitForNodeStatus(node2Dto, NodeConnectionState.OFFLOADED.name());
+        // st349/macos / 2022-02-14 08:52:19,875
+        // 2022-02-14 08:52:18:970 - Running iteration 4
+        // 2022-02-14 08:52:19:398 - "status":"DISCONNECTED"
+        // 2022-02-14 08:52:19:835 - "status":"OFFLOADING"
+        // 2022-02-14 08:52:19,875 - Failed to asynchronously commit session
+        // st371/ubuntu / 2022-02-15 18:50:53,802 - 2022-02-15 18:50:20,890
 
         getClientUtil().connectNode(nodeId);
         waitForAllNodesConnected();
-    }
-
-    private boolean isNodeOffloaded() {
-        final ClusterEntity clusterEntity;
-        try {
-            clusterEntity = getNifiClient().getControllerClient().getNodes();
-        } catch (final Exception e) {
-            logger.error("Failed to determine if node is offloaded", e);
-            return false;
-        }
-
-        final Collection<NodeDTO> nodeDtos = clusterEntity.getCluster().getNodes();
-
-        for (final NodeDTO dto : nodeDtos) {
-            final String status = dto.getStatus();
-            if (status.equalsIgnoreCase("OFFLOADED")) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private NodeDTO getNodeDTO(final int apiPort) throws NiFiClientException, IOException {

@@ -34,6 +34,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLServerSocket;
+
+import org.apache.commons.io.IOUtils;
 import org.apache.nifi.events.EventReporter;
 import org.apache.nifi.reporting.Severity;
 import org.apache.nifi.security.util.CertificateUtils;
@@ -96,7 +98,7 @@ public class ConnectionLoadBalanceServer {
     }
 
     public void stop() {
-        stopped = false;
+        stopped = true;
 
         if (acceptConnection != null) {
             acceptConnection.stop();
@@ -147,27 +149,40 @@ public class ConnectionLoadBalanceServer {
         }
 
         public void stop() {
+            logger.debug("stop");
             this.stopped = true;
+            IOUtils.closeQuietly(socket);
         }
 
         @Override
         public void run() {
+            try {
+                logger.debug("Start thread {}.", Thread.currentThread().getName());
+                runInner();
+            } finally {
+                logger.debug("Finish thread {}.", Thread.currentThread().getName());
+            }
+        }
+
+        public void runInner() {
             String peerDescription = "<Unknown Client>";
 
             while (!stopped) {
                 try {
-                    peerDescription = socket.getRemoteSocketAddress().toString();
+                    peerDescription =  socket.getLocalSocketAddress() + "::" + socket.getRemoteSocketAddress();
 
-                    logger.debug("Receiving FlowFiles from Peer {}", peerDescription);
+                    logger.debug("Receiving FlowFiles from Peer (CA) {}", peerDescription);
                     loadBalanceProtocol.receiveFlowFiles(socket, in, out);
 
                     if (socket.isClosed()) {
-                        logger.debug("Finished Receiving FlowFiles from Peer {}", peerDescription);
+                        logger.debug("Finished Receiving FlowFiles from Peer {}, socket closed", peerDescription);
                         break;
                     }
                 } catch (final Exception e) {
+                    stopped = true;
                     if (socket != null) {
                         try {
+                            logger.debug("closing socket");
                             socket.close();
                         } catch (final IOException ioe) {
                             e.addSuppressed(ioe);
@@ -183,7 +198,6 @@ public class ConnectionLoadBalanceServer {
                         logger.error("Failed to communicate with Peer {}", peerDescription, e);
                         eventReporter.reportEvent(Severity.ERROR, "Load Balanced Connection", "Failed to receive FlowFiles for Load Balancing due to " + e);
                     }
-                    return;
                 }
             }
         }
@@ -263,7 +277,7 @@ public class ConnectionLoadBalanceServer {
 
                     final CommunicateAction communicateAction = new CommunicateAction(loadBalanceProtocol, socket, eventReporter);
                     final Thread commsThread = new Thread(communicateAction);
-                    commsThread.setName("Load-Balance Server Thread-" + threadCounter.getAndIncrement());
+                    commsThread.setName("Load-Balanced Server Thread-" + threadCounter.getAndIncrement());
                     commsThread.start();
 
                     communicationActions.add(communicateAction);
@@ -273,7 +287,9 @@ public class ConnectionLoadBalanceServer {
             }
 
             try {
+                logger.debug("server socket closing");
                 serverSocket.close();
+                logger.debug("server socket closed");
             } catch (final Exception e) {
                 logger.warn("Failed to properly shutdown Server Socket for Load Balancing", e);
             }

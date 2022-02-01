@@ -18,6 +18,8 @@ package org.apache.nifi.tests.system;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,6 +117,15 @@ public class AggregateNiFiInstance implements NiFiInstance {
     @Override
     public Properties getProperties() {
         return null;
+    }
+
+    @Override
+    public String getProperty(final String propertyName) throws IOException {
+        final Collection<String> propertyValues = new ArrayList<>();
+        for (final NiFiInstance instance : instances) {
+            propertyValues.add(instance.getProperty(propertyName));
+        }
+        return propertyValues.toString();
     }
 
     @Override

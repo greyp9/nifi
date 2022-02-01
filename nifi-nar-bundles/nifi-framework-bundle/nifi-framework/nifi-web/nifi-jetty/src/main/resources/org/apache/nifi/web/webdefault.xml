@@ -43,6 +43,10 @@
         This file is applied to a Web application before it's own WEB_INF/web.xml file
     </description>
 
+    <listener>
+        <listener-class>ch.qos.logback.classic.servlet.LogbackServletContextListener</listener-class>
+    </listener>
+
     <!-- ==================================================================== -->
     <!-- Removes static references to beans from javax.el.BeanELResolver to   -->
     <!-- ensure webapp classloader can be released on undeploy                -->
@@ -78,6 +82,11 @@
         <param-value>-1</param-value>
       </context-param>
     -->
+
+    <context-param>
+        <param-name>logbackDisableServletContainerInitializer</param-name>
+        <param-value>true</param-value>
+    </context-param>
 
     <!-- ==================================================================== -->
     <!-- The default servlet.                                                 -->

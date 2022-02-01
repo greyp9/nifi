@@ -112,22 +112,24 @@ public class StandardLoadBalanceProtocol implements LoadBalanceProtocol {
 
     @Override
     public void receiveFlowFiles(final Socket socket, final InputStream in, final OutputStream out) throws IOException {
-        String peerDescription = socket.getInetAddress().getHostName();
+        String peerDescription =  socket.getLocalSocketAddress() + "::" + socket.getRemoteSocketAddress();
         if (socket instanceof SSLSocket) {
             logger.debug("Connection received from peer {}", peerDescription);
 
-            peerDescription = authorizer.authorize((SSLSocket) socket);
+            peerDescription = authorizer.authorize((SSLSocket) socket) + "::" + peerDescription;
             logger.debug("Client Identities are authorized to load balance data for peer {}", peerDescription);
         }
 
         final int version = negotiateProtocolVersion(in, out, peerDescription);
 
         if (version == SOCKET_CLOSED) {
+            logger.debug("Socket closing {}", peerDescription);
             socket.close();
+            logger.debug("Socket closed {}", peerDescription);
             return;
         }
         if (version == NO_DATA_AVAILABLE) {
-            logger.debug("No data is available from {}", socket.getRemoteSocketAddress());
+            logger.debug("No data is available from {}", peerDescription);
             return;
         }
 
@@ -161,7 +163,7 @@ public class StandardLoadBalanceProtocol implements LoadBalanceProtocol {
             if (supported) {
                 logger.debug("Peer {} requested version {} of the Load Balance Protocol. Accepting version.", peerDescription, requestedVersion);
 
-                out.write(VERSION_ACCEPTED);
+                out.write(VERSION_ACCEPTED);  // st403/ubuntu - 2022-02-18 05:16:06,648
                 out.flush();
                 return requestedVersion;
             }

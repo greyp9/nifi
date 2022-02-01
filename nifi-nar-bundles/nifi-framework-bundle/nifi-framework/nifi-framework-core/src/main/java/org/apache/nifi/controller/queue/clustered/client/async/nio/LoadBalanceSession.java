@@ -436,14 +436,16 @@ public class LoadBalanceSession {
         buffer.put((byte) protocolVersion);
         buffer.rewind();
 
-        readTimeout = System.currentTimeMillis() + timeoutMillis;
+        readTimeout = System.currentTimeMillis() + 1000L; // timeoutMillis;  // st403/ubuntu - 2022-02-18 05:16:06,648
         phase = TransactionPhase.RECEIVE_PROTOCOL_VERSION_ACKNOWLEDGMENT;
         return buffer;
     }
 
     private boolean receiveProtocolVersionAcknowledgment() throws IOException {
-        logger.debug("Confirming Transaction Complete for Peer {}", peerDescription);
+        logger.debug("Confirming Protocol Version for Peer {}", peerDescription);
 
+        //final boolean dropResponse = (peerDescription.contains("8::"));
+        //final OptionalInt ackResponse = dropResponse ? OptionalInt.empty() : channel.read();
         final OptionalInt ackResponse = channel.read();
         if (!ackResponse.isPresent()) {
             if (System.currentTimeMillis() > readTimeout) {

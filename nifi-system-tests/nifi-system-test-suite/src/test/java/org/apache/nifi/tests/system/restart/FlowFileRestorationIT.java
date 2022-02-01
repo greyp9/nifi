@@ -50,6 +50,9 @@ public class FlowFileRestorationIT extends NiFiSystemIT {
         final ProcessorEntity terminate = getClientUtil().createProcessor("TerminateFlowFile");
         final ConnectionEntity connection = getClientUtil().createConnection(generator, terminate, "success");
 
+        Thread.sleep(3000L);  // st283/macos - 2022-02-09 09:12:27:868
+        // Processor with ID ... cannot be started because its validation is still being performed
+
         getNifiClient().getProcessorClient().startProcessor(generator);
         waitForQueueCount(connection.getId(), 1);
         getNifiClient().getProcessorClient().stopProcessor(generator);
