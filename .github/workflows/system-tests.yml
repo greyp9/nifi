@@ -89,7 +89,9 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: ubuntu-latest-troubleshooting-logs
-          path: "**/target/troubleshooting/"
+          path: |
+            "**/target/surefire-reports/"
+            "**/target/troubleshooting/"
           retention-days: 7
 
   macos:
@@ -133,5 +135,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: macos-latest-troubleshooting-logs
-          path: "**/target/troubleshooting/"
+          path: |
+            "**/target/surefire-reports/"
+            "**/target/troubleshooting/"
           retention-days: 7
