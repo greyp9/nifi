@@ -17,7 +17,7 @@ name: system-tests
 
 on:
   schedule:
-    - cron: "0 0 1 1 *"
+    - cron: "0 */3 * * *"
   push:
     branches:
       - 'NIFI-9233-A'
@@ -90,8 +90,8 @@ jobs:
         with:
           name: ubuntu-latest-troubleshooting-logs
           path: |
-            "**/target/surefire-reports/"
-            "**/target/troubleshooting/"
+            '**/target/surefire-reports/'
+            '**/target/troubleshooting/'
           retention-days: 7
 
   macos:
@@ -136,6 +136,6 @@ jobs:
         with:
           name: macos-latest-troubleshooting-logs
           path: |
-            "**/target/surefire-reports/"
-            "**/target/troubleshooting/"
+            '**/target/surefire-reports/'
+            '**/target/troubleshooting/'
           retention-days: 7
