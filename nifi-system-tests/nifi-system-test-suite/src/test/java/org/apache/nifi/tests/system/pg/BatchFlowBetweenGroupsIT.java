@@ -30,6 +30,8 @@ import org.apache.nifi.web.api.entity.ProcessGroupEntity;
 import org.apache.nifi.web.api.entity.ProcessGroupFlowEntity;
 import org.apache.nifi.web.api.entity.ProcessorEntity;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,8 +42,19 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+@RunWith(Parameterized.class)
 public class BatchFlowBetweenGroupsIT extends NiFiSystemIT {
     private static final Logger logger = LoggerFactory.getLogger(BatchFlowBetweenGroupsIT.class);
+
+    @Parameterized.Parameters
+    public static Object[][] data() {
+        return new Object[1][0];
+    }
+
+    @Override
+    protected boolean isDestroyEnvironmentAfterEachTest() {
+        return true;
+    }
 
     @Test
     public void testSingleConcurrencyAndBatchOutputToBatchInputOutput() throws NiFiClientException, IOException, InterruptedException {
