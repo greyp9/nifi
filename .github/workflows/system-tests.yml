@@ -18,7 +18,7 @@ name: system-tests
 on:
   # Run every day at 00:00
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "1 */2 * * *"
 
 env:
   DEFAULT_MAVEN_OPTS: >-
