@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLSession;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -30,6 +31,10 @@ import java.nio.channels.SocketChannel;
 import java.util.OptionalInt;
 
 public class PeerChannel implements Closeable {
+    private static final int END_OF_FILE = -1;
+
+    private static final int EMPTY_BUFFER = 0;
+
     private static final Logger logger = LoggerFactory.getLogger(PeerChannel.class);
 
     private final SocketChannel socketChannel;
@@ -38,7 +43,7 @@ public class PeerChannel implements Closeable {
 
     private final ByteBuffer singleByteBuffer = ByteBuffer.allocate(1);
     private ByteBuffer destinationBuffer = ByteBuffer.allocate(16 * 1024); // buffer that SSLEngine is to write into
-    private ByteBuffer streamBuffer = ByteBuffer.allocate(16 * 1024); // buffer for data that is read from SocketChannel
+    private final ByteBuffer streamBuffer = ByteBuffer.allocate(16 * 1024); // buffer for data that is read from SocketChannel
     private ByteBuffer applicationBuffer = ByteBuffer.allocate(0); // buffer for application-level data that is ready to be served up (i.e., already decrypted if necessary)
 
     public PeerChannel(final SocketChannel socketChannel, final SSLEngine sslEngine, final String peerDescription) {
@@ -50,7 +55,37 @@ public class PeerChannel implements Closeable {
 
     @Override
     public void close() throws IOException {
-        socketChannel.close();
+        try {
+            if (sslEngine == null) {
+                logger.debug("Closing Peer Channel [{}] SSLEngine not configured", peerDescription);
+            } else {
+                logger.debug("Closing Peer Channel [{}] SSLEngine close started", peerDescription);
+                sslEngine.closeOutbound();
+
+                final ByteBuffer inputBuffer = ByteBuffer.allocate(0);
+                final ByteBuffer outputBuffer = ByteBuffer.allocate(sslEngine.getSession().getPacketBufferSize());
+
+                SSLEngineResult wrapResult = sslEngine.wrap(inputBuffer, outputBuffer);
+                SSLEngineResult.Status status = wrapResult.getStatus();
+                outputBuffer.flip();
+                if (SSLEngineResult.Status.OK == status) {
+                    write(outputBuffer);
+                    outputBuffer.clear();
+                    wrapResult = sslEngine.wrap(inputBuffer, outputBuffer);
+                    status = wrapResult.getStatus();
+                }
+                if (SSLEngineResult.Status.CLOSED == status) {
+                    write(outputBuffer);
+                } else {
+                    throw new SSLException(String.format("Closing Peer Channel [%s] Invalid Wrap Result Status [%s]", peerDescription, status));
+                }
+
+                logger.debug("Closing Peer Channel [{}] SSLEngine close completed", peerDescription);
+            }
+        } finally {
+            logger.debug("Closing Peer Channel [{}] Socket Channel close started", peerDescription);
+            socketChannel.close();
+        }
     }
 
     public boolean isConnected() {
@@ -79,9 +114,9 @@ public class PeerChannel implements Closeable {
         singleByteBuffer.clear();
         final int bytesRead = read(singleByteBuffer);
         if (bytesRead < 0) {
-             return OptionalInt.of(-1);
+             return OptionalInt.of(END_OF_FILE);
         }
-        if (bytesRead == 0) {
+        if (bytesRead == EMPTY_BUFFER) {
             return OptionalInt.empty();
         }
 
@@ -104,6 +139,7 @@ public class PeerChannel implements Closeable {
      * @throws IOException if a failure occurs while encrypting the data
      */
     public ByteBuffer prepareForWrite(final ByteBuffer plaintext) throws IOException {
+        logger.trace("Channel [{}] Buffer wrap started: Input Bytes [{}]", peerDescription, plaintext.remaining());
         if (sslEngine == null) {
             return plaintext;
         }
@@ -125,6 +161,7 @@ public class PeerChannel implements Closeable {
         }
 
         prepared.flip();
+        logger.trace("Channel [{}] Buffer wrap completed: Prepared Bytes [{}]", peerDescription, prepared.remaining());
         return prepared;
     }
 
@@ -141,12 +178,11 @@ public class PeerChannel implements Closeable {
         }
 
         final int bytesRead = socketChannel.read(streamBuffer);
-        if (bytesRead < 1) {
-            return bytesRead;
-        }
-
-        if (bytesRead > 0) {
-            logger.trace("Read {} bytes from SocketChannel", bytesRead);
+        logger.trace("Channel [{}] Socket read completed: bytes [{}]", peerDescription, bytesRead);
+        if (bytesRead == END_OF_FILE) {
+            return END_OF_FILE;
+        } else if (streamBuffer.remaining() == EMPTY_BUFFER) {
+            return EMPTY_BUFFER;
         }
 
         streamBuffer.flip();
@@ -157,7 +193,7 @@ public class PeerChannel implements Closeable {
                 return copy(applicationBuffer, dst);
             } else {
                 final boolean decrypted = decrypt(streamBuffer);
-                logger.trace("Decryption after reading those bytes successful = {}", decrypted);
+                logger.trace("Channel [{}] Decryption completed [{}]", peerDescription, decrypted);
 
                 if (decrypted) {
                     cloneToApplicationBuffer(destinationBuffer);
@@ -167,9 +203,8 @@ public class PeerChannel implements Closeable {
                 } else {
                     // Not enough data to decrypt. Compact the buffer so that we keep the data we have
                     // but prepare the buffer to be written to again.
-                    logger.debug("Not enough data to decrypt. Will need to consume more data before decrypting");
-                    streamBuffer.compact();
-                    return 0;
+                    logger.trace("Channel [{}] Socket Channel read required", peerDescription);
+                    return EMPTY_BUFFER;
                 }
             }
         } finally {
@@ -219,6 +254,7 @@ public class PeerChannel implements Closeable {
 
         while (true) {
             final SSLEngineResult result = sslEngine.wrap(plaintext, destinationBuffer);
+            logOperationResult("WRAP", result);
 
             switch (result.getStatus()) {
                 case OK:
@@ -260,15 +296,21 @@ public class PeerChannel implements Closeable {
 
         while (true) {
             final SSLEngineResult result = sslEngine.unwrap(encrypted, destinationBuffer);
+            logOperationResult("UNWRAP", result);
 
             switch (result.getStatus()) {
                 case OK:
+                    if (SSLEngineResult.HandshakeStatus.FINISHED == result.getHandshakeStatus()) {
+                        // RFC 8446 Section 4.6 describes Post-Handshake Messages for TLS 1.3
+                        // Break out of switch statement to call SSLEngine.unwrap() again
+                        break;
+                    }
                     destinationBuffer.flip();
                     return true;
                 case CLOSED:
                     throw new IOException("Failed to decrypt data from Peer " + peerDescription + " because Peer unexpectedly closed connection");
                 case BUFFER_OVERFLOW:
-                    // ecnryptedBuffer is not large enough. Need to increase the size.
+                    // encryptedBuffer is not large enough. Need to increase the size.
                     final ByteBuffer tempBuffer = ByteBuffer.allocate(encrypted.position() + sslEngine.getSession().getApplicationBufferSize());
                     destinationBuffer.flip();
                     tempBuffer.put(destinationBuffer);
@@ -295,18 +337,17 @@ public class PeerChannel implements Closeable {
 
         while (true) {
             final SSLEngineResult.HandshakeStatus handshakeStatus = sslEngine.getHandshakeStatus();
+            logHandshakeStatus(handshakeStatus);
 
             switch (handshakeStatus) {
                 case FINISHED:
                 case NOT_HANDSHAKING:
                     streamBuffer.clear();
                     destinationBuffer.clear();
-                    logger.debug("Completed SSL Handshake with Peer {}", peerDescription);
+                    logHandshakeCompleted();
                     return;
 
                 case NEED_TASK:
-                    logger.debug("SSL Handshake with Peer {} Needs Task", peerDescription);
-
                     Runnable runnable;
                     while ((runnable = sslEngine.getDelegatedTask()) != null) {
                         runnable.run();
@@ -314,27 +355,22 @@ public class PeerChannel implements Closeable {
                     break;
 
                 case NEED_WRAP:
-                    logger.trace("SSL Handshake with Peer {} Needs Wrap", peerDescription);
-
                     encrypt(emptyMessage);
                     final int bytesWritten = write(destinationBuffer);
-                    logger.debug("Wrote {} bytes for NEED_WRAP portion of Handshake", bytesWritten);
+                    logHandshakeStatusBytes(handshakeStatus, "Socket write completed", bytesWritten);
                     break;
 
                 case NEED_UNWRAP:
-                    logger.trace("SSL Handshake with Peer {} Needs Unwrap", peerDescription);
-
                     while (sslEngine.getHandshakeStatus() == SSLEngineResult.HandshakeStatus.NEED_UNWRAP) {
                         final boolean decrypted = decrypt(unwrapBuffer);
-                        if (decrypted) {
-                            logger.trace("Decryption was successful for NEED_UNWRAP portion of Handshake");
+                        final SSLEngineResult.HandshakeStatus unwrapHandshakeStatus = sslEngine.getHandshakeStatus();
+                        if (decrypted || unwrapHandshakeStatus == SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) {
+                            logHandshakeStatus(unwrapHandshakeStatus, "Decryption completed");
                             break;
                         }
 
                         if (unwrapBuffer.capacity() - unwrapBuffer.position() < 1) {
-                            logger.trace("Enlarging size of Buffer for NEED_UNWRAP portion of Handshake");
-
-                            // destinationBuffer is not large enough. Need to increase the size.
+                            logHandshakeStatus(unwrapHandshakeStatus, "Increasing unwrap buffer for decryption");
                             final ByteBuffer tempBuffer = ByteBuffer.allocate(unwrapBuffer.capacity() + sslEngine.getSession().getApplicationBufferSize());
                             tempBuffer.put(unwrapBuffer);
                             unwrapBuffer = tempBuffer;
@@ -342,17 +378,37 @@ public class PeerChannel implements Closeable {
                             continue;
                         }
 
-                        logger.trace("Need to read more bytes for NEED_UNWRAP portion of Handshake");
-
-                        // Need to read more data.
+                        logHandshakeStatus(unwrapHandshakeStatus, "Socket read started");
                         unwrapBuffer.compact();
                         final int bytesRead = socketChannel.read(unwrapBuffer);
                         unwrapBuffer.flip();
-                        logger.debug("Read {} bytes for NEED_UNWRAP portion of Handshake", bytesRead);
+
+                        logHandshakeStatusBytes(unwrapHandshakeStatus, "Socket read completed", bytesRead);
                     }
 
                     break;
             }
         }
+    }
+
+    private void logOperationResult(final String operation, final SSLEngineResult sslEngineResult) {
+        logger.trace("Channel [{}] {} [{}]", peerDescription, operation, sslEngineResult);
+    }
+
+    private void logHandshakeCompleted() {
+        final SSLSession sslSession = sslEngine.getSession();
+        logger.debug("Channel [{}] Handshake Completed Protocol [{}] Cipher Suite [{}]", peerDescription, sslSession.getProtocol(), sslSession.getCipherSuite());
+    }
+
+    private void logHandshakeStatus(final SSLEngineResult.HandshakeStatus handshakeStatus) {
+        logger.debug("Channel [{}] Handshake Status [{}]", peerDescription, handshakeStatus);
+    }
+
+    private void logHandshakeStatus(final SSLEngineResult.HandshakeStatus handshakeStatus, final String operation) {
+        logger.debug("Channel [{}] Handshake Status [{}] {}", peerDescription, handshakeStatus, operation);
+    }
+
+    private void logHandshakeStatusBytes(final SSLEngineResult.HandshakeStatus handshakeStatus, final String operation, final int bytes) {
+        logger.debug("Channel [{}] Handshake Status [{}] {} Bytes [{}]", peerDescription, handshakeStatus, operation, bytes);
     }
 }
