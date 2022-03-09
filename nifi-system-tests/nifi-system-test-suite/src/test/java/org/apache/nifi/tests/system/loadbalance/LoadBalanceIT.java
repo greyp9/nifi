@@ -36,6 +36,8 @@ import org.apache.nifi.web.api.entity.FlowFileEntity;
 import org.apache.nifi.web.api.entity.ProcessorEntity;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,8 +52,15 @@ import java.util.Set;
 import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
 
+@RunWith(Parameterized.class)
 public class LoadBalanceIT extends NiFiSystemIT {
     private final Logger logger = LoggerFactory.getLogger(getClass());
+
+    @Parameterized.Parameters
+    public static Object[][] data() {
+        return new Object[3][0];
+    }
+
 
     @Override
     protected NiFiInstanceFactory getInstanceFactory() {

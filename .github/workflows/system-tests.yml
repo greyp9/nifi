@@ -16,9 +16,11 @@
 name: system-tests
 
 on:
-  # Run every day at 00:00
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "0 */2 * * *"
+  push:
+    branches:
+      - 'NIFI-9233-H'
 
 env:
   DEFAULT_MAVEN_OPTS: >-
@@ -40,9 +42,9 @@ env:
     package
     verify
     -P integration-tests
+    -Dit.test=LoadBalanceIT
   MAVEN_PROJECTS: >-
     -pl nifi-system-tests/nifi-system-test-suite
-    -pl nifi-system-tests/nifi-stateless-system-test-suite
 
 jobs:
   ubuntu:

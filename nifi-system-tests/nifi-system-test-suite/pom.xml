@@ -30,6 +30,7 @@
                 <artifactId>maven-failsafe-plugin</artifactId>
                 <configuration>
                     <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                    <skipAfterFailureCount>1</skipAfterFailureCount>
                 </configuration>
             </plugin>
             <plugin>
