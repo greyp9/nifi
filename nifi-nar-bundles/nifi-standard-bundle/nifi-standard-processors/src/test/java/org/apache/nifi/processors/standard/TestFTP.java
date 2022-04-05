@@ -253,7 +253,7 @@ public class TestFTP {
         retrievedFile.assertContentEquals("Just some random test test test chocolate");
     }
 
-    @Test
+    //@Test // NIFI-9826 temp comment out
     public void basicFileFetchWithUTF8FileName() throws IOException {
         FileSystem fs = fakeFtpServer.getFileSystem();
 
