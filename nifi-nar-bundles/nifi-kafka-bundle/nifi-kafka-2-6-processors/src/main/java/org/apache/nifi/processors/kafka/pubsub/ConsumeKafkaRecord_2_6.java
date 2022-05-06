@@ -447,7 +447,7 @@ public class ConsumeKafkaRecord_2_6 extends AbstractProcessor implements Verifia
 
         final String outputStrategy = context.getProperty(OUTPUT_STRATEGY).getValue();
         final String keyFormat = context.getProperty(KEY_FORMAT).getValue();
-        final String keyRecordReader = context.getProperty(KEY_RECORD_READER).getValue();
+        final RecordReaderFactory keyReaderFactory = context.getProperty(KEY_RECORD_READER).asControllerService(RecordReaderFactory.class);
 
         final int[] partitionsToConsume;
         try {
@@ -466,12 +466,12 @@ public class ConsumeKafkaRecord_2_6 extends AbstractProcessor implements Verifia
 
             return new ConsumerPool(maxLeases, readerFactory, writerFactory, props, topics, maxUncommittedTime, securityProtocol,
                     bootstrapServers, log, honorTransactions, charset, headerNamePattern, separateByKey, keyEncoding, partitionsToConsume,
-                    commitOffsets, outputStrategy, keyFormat, keyRecordReader);
+                    commitOffsets, outputStrategy, keyFormat, keyReaderFactory);
         } else if (topicType.equals(TOPIC_PATTERN.getValue())) {
             final Pattern topicPattern = Pattern.compile(topicListing.trim());
             return new ConsumerPool(maxLeases, readerFactory, writerFactory, props, topicPattern, maxUncommittedTime, securityProtocol,
                     bootstrapServers, log, honorTransactions, charset, headerNamePattern, separateByKey, keyEncoding, partitionsToConsume,
-                    commitOffsets, outputStrategy, keyFormat, keyRecordReader);
+                    commitOffsets, outputStrategy, keyFormat, keyReaderFactory);
         } else {
             getLogger().error("Subscription type has an unknown value {}", new Object[] {topicType});
             return null;

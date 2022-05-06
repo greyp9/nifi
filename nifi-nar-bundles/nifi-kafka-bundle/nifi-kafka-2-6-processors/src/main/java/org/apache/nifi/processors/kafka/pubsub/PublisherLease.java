@@ -17,6 +17,8 @@
 
 package org.apache.nifi.processors.kafka.pubsub;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
@@ -35,6 +37,7 @@ import org.apache.nifi.schema.access.SchemaNotFoundException;
 import org.apache.nifi.serialization.RecordSetWriter;
 import org.apache.nifi.serialization.RecordSetWriterFactory;
 import org.apache.nifi.serialization.WriteResult;
+import org.apache.nifi.serialization.record.MapRecord;
 import org.apache.nifi.serialization.record.Record;
 import org.apache.nifi.serialization.record.RecordSchema;
 import org.apache.nifi.serialization.record.RecordSet;
@@ -194,8 +197,13 @@ public class PublisherLease implements Closeable {
                     writer.flush();
                 }
 
+                // hard-coded to KafkaPublish JSON key type
+                final MapRecord mapRecord = (MapRecord) record.getValue(messageKeyField);
                 final byte[] messageContent = baos.toByteArray();
-                final String key = messageKeyField == null ? null : record.getAsString(messageKeyField);
+                final ObjectMapper mapper = new ObjectMapper();
+                final ObjectNode rootNode = mapper.createObjectNode();
+                mapRecord.toMap().forEach((key1, value) -> rootNode.put(key1, (String) value));
+                final String key = mapper.writer().writeValueAsString(rootNode);
                 final byte[] messageKey = (key == null) ? null : key.getBytes(StandardCharsets.UTF_8);
 
                 final Integer partition = partitioner == null ? null : partitioner.apply(record);
