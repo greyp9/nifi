@@ -445,6 +445,10 @@ public class ConsumeKafkaRecord_2_6 extends AbstractProcessor implements Verifia
         final boolean separateByKey = context.getProperty(SEPARATE_BY_KEY).asBoolean();
         final String keyEncoding = context.getProperty(KEY_ATTRIBUTE_ENCODING).getValue();
 
+        final String outputStrategy = context.getProperty(OUTPUT_STRATEGY).getValue();
+        final String keyFormat = context.getProperty(KEY_FORMAT).getValue();
+        final String keyRecordReader = context.getProperty(KEY_RECORD_READER).getValue();
+
         final int[] partitionsToConsume;
         try {
             partitionsToConsume = ConsumerPartitionsUtil.getPartitionsForHost(context.getAllProperties(), getLogger());
@@ -461,11 +465,13 @@ public class ConsumeKafkaRecord_2_6 extends AbstractProcessor implements Verifia
             }
 
             return new ConsumerPool(maxLeases, readerFactory, writerFactory, props, topics, maxUncommittedTime, securityProtocol,
-                bootstrapServers, log, honorTransactions, charset, headerNamePattern, separateByKey, keyEncoding, partitionsToConsume, commitOffsets);
+                    bootstrapServers, log, honorTransactions, charset, headerNamePattern, separateByKey, keyEncoding, partitionsToConsume,
+                    commitOffsets, outputStrategy, keyFormat, keyRecordReader);
         } else if (topicType.equals(TOPIC_PATTERN.getValue())) {
             final Pattern topicPattern = Pattern.compile(topicListing.trim());
             return new ConsumerPool(maxLeases, readerFactory, writerFactory, props, topicPattern, maxUncommittedTime, securityProtocol,
-                bootstrapServers, log, honorTransactions, charset, headerNamePattern, separateByKey, keyEncoding, partitionsToConsume, commitOffsets);
+                    bootstrapServers, log, honorTransactions, charset, headerNamePattern, separateByKey, keyEncoding, partitionsToConsume,
+                    commitOffsets, outputStrategy, keyFormat, keyRecordReader);
         } else {
             getLogger().error("Subscription type has an unknown value {}", new Object[] {topicType});
             return null;

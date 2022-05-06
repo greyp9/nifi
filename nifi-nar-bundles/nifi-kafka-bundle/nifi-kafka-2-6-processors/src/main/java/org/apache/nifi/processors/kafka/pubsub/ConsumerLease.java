@@ -36,8 +36,12 @@ import org.apache.nifi.serialization.RecordReaderFactory;
 import org.apache.nifi.serialization.RecordSetWriter;
 import org.apache.nifi.serialization.RecordSetWriterFactory;
 import org.apache.nifi.serialization.SchemaValidationException;
+import org.apache.nifi.serialization.SimpleRecordSchema;
 import org.apache.nifi.serialization.WriteResult;
+import org.apache.nifi.serialization.record.MapRecord;
 import org.apache.nifi.serialization.record.Record;
+import org.apache.nifi.serialization.record.RecordField;
+import org.apache.nifi.serialization.record.RecordFieldType;
 import org.apache.nifi.serialization.record.RecordSchema;
 
 import javax.xml.bind.DatatypeConverter;
@@ -89,6 +93,9 @@ public abstract class ConsumerLease implements Closeable, ConsumerRebalanceListe
     private final Pattern headerNamePattern;
     private final boolean separateByKey;
     private final boolean commitOffsets;
+    private final String outputStrategy;
+    private final String keyFormat;
+    private final String keyRecordReader;
     private boolean poisoned = false;
     //used for tracking demarcated flowfiles to their TopicPartition so we can append
     //to them on subsequent poll calls
@@ -111,7 +118,10 @@ public abstract class ConsumerLease implements Closeable, ConsumerRebalanceListe
             final Charset headerCharacterSet,
             final Pattern headerNamePattern,
             final boolean separateByKey,
-            final boolean commitMessageOffsets) {
+            final boolean commitMessageOffsets,
+            final String outputStrategy,
+            final String keyFormat,
+            final String keyRecordReader) {
         this.maxWaitMillis = maxWaitMillis;
         this.kafkaConsumer = kafkaConsumer;
         this.demarcatorBytes = demarcatorBytes;
@@ -125,6 +135,9 @@ public abstract class ConsumerLease implements Closeable, ConsumerRebalanceListe
         this.headerNamePattern = headerNamePattern;
         this.separateByKey = separateByKey;
         this.commitOffsets = commitMessageOffsets;
+        this.outputStrategy = outputStrategy;
+        this.keyFormat = keyFormat;
+        this.keyRecordReader = keyRecordReader;
     }
 
     /**
@@ -593,6 +606,9 @@ public abstract class ConsumerLease implements Closeable, ConsumerRebalanceListe
                     try {
                         Record record;
                         while ((record = reader.nextRecord()) != null) {
+                            if (KafkaProcessorUtils.USE_WRAPPER.getValue().equals(outputStrategy)) {
+                                record = toWrapperRecord(consumerRecord, record);
+                            }
                             // Determine the bundle for this record.
                             final RecordSchema recordSchema = record.getSchema();
                             final BundleInformation bundleInfo = new BundleInformation(topicPartition, recordSchema, attributes, separateByKey ? consumerRecord.key() : null);
@@ -651,6 +667,33 @@ public abstract class ConsumerLease implements Closeable, ConsumerRebalanceListe
 
             throw new ProcessException(e);
         }
+    }
+
+    private MapRecord toWrapperRecord(final ConsumerRecord<byte[], byte[]> consumerRecord, final Record record) {
+        final RecordField fieldKey = new RecordField("key", RecordFieldType.ARRAY.getArrayDataType(RecordFieldType.BYTE.getDataType()));
+        //final RecordField fieldValue = new RecordField("value", RecordFieldType.ARRAY.getArrayDataType(RecordFieldType.BYTE.getDataType()));
+        final RecordField fieldValue = new RecordField("value", RecordFieldType.RECORD.getRecordDataType(record.getSchema()));
+        final RecordField fieldHeaders = new RecordField("headers", RecordFieldType.MAP.getMapDataType(RecordFieldType.STRING.getDataType()));
+        final RecordField fieldMetadata = new RecordField("metadata", RecordFieldType.MAP.getMapDataType(RecordFieldType.STRING.getDataType()));
+        final RecordSchema rootRecordSchema = new SimpleRecordSchema(Arrays.asList(fieldKey, fieldValue, fieldHeaders, fieldMetadata));
+
+        final Map<String, String> headers = new HashMap<>();
+        Arrays.stream(consumerRecord.headers().toArray()).forEach(
+                h -> headers.put(h.key(), new String(h.value(), StandardCharsets.UTF_8)));
+
+        final Map<String, String> metadata = new HashMap<>();
+        metadata.put("topic", consumerRecord.topic());
+        metadata.put("partition", Integer.toString(consumerRecord.partition()));
+        metadata.put("offset", Long.toString(consumerRecord.offset()));
+        metadata.put("timestamp", Long.toString(consumerRecord.timestamp()));
+
+        final Map<String, Object> recordValues = new HashMap<>();
+        recordValues.put(fieldKey.getFieldName(), consumerRecord.key());
+        //recordValues.put(fieldValue.getFieldName(), consumerRecord.value());
+        recordValues.put(fieldValue.getFieldName(), record);
+        recordValues.put(fieldHeaders.getFieldName(), headers);
+        recordValues.put(fieldMetadata.getFieldName(), metadata);
+        return new MapRecord(rootRecordSchema, recordValues);
     }
 
     private void closeWriter(final RecordSetWriter writer) {
