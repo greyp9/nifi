@@ -17,8 +17,6 @@
 
 package org.apache.nifi.processors.kafka.pubsub;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
@@ -70,6 +68,7 @@ public class PublisherLease implements Closeable {
     private final boolean useTransactions;
     private final Pattern attributeNameRegex;
     private final Charset headerCharacterSet;
+    private final RecordSetWriterFactory recordKeyWriterFactory;
     private volatile boolean poisoned = false;
     private final AtomicLong messagesSent = new AtomicLong(0L);
 
@@ -78,8 +77,9 @@ public class PublisherLease implements Closeable {
 
     private InFlightMessageTracker tracker;
 
-    public PublisherLease(final Producer<byte[], byte[]> producer, final int maxMessageSize, final long maxAckWaitMillis, final ComponentLog logger,
-        final boolean useTransactions, final Pattern attributeNameRegex, final Charset headerCharacterSet) {
+    public PublisherLease(final Producer<byte[], byte[]> producer, final int maxMessageSize, final long maxAckWaitMillis,
+                          final ComponentLog logger, final boolean useTransactions, final Pattern attributeNameRegex,
+                          final Charset headerCharacterSet, final RecordSetWriterFactory recordKeyWriterFactory) {
         this.producer = producer;
         this.maxMessageSize = maxMessageSize;
         this.logger = logger;
@@ -87,6 +87,7 @@ public class PublisherLease implements Closeable {
         this.useTransactions = useTransactions;
         this.attributeNameRegex = attributeNameRegex;
         this.headerCharacterSet = headerCharacterSet;
+        this.recordKeyWriterFactory = recordKeyWriterFactory;
     }
 
     protected void poison() {
@@ -196,15 +197,21 @@ public class PublisherLease implements Closeable {
                     additionalAttributes = writeResult.getAttributes();
                     writer.flush();
                 }
-
-                // hard-coded to KafkaPublish JSON key type
-                final MapRecord mapRecord = (MapRecord) record.getValue(messageKeyField);
                 final byte[] messageContent = baos.toByteArray();
-                final ObjectMapper mapper = new ObjectMapper();
-                final ObjectNode rootNode = mapper.createObjectNode();
-                mapRecord.toMap().forEach((key1, value) -> rootNode.put(key1, (String) value));
-                final String key = mapper.writer().writeValueAsString(rootNode);
-                final byte[] messageKey = (key == null) ? null : key.getBytes(StandardCharsets.UTF_8);
+
+                final byte[] messageKey;
+                if (recordKeyWriterFactory == null) {
+                    messageKey = Optional.ofNullable(record.getAsString(messageKeyField))
+                            .map(s -> s.getBytes(StandardCharsets.UTF_8)).orElse(null);
+                } else {
+                    final ByteArrayOutputStream os = new ByteArrayOutputStream(1024);
+                    final MapRecord keyRecord = (MapRecord) record.getValue(messageKeyField);
+                    try (final RecordSetWriter writerKey = writerFactory.createWriter(logger, keyRecord.getSchema(), os, flowFile)) {
+                        writerKey.write(keyRecord);
+                        writerKey.flush();
+                    }
+                    messageKey = os.toByteArray();
+                }
 
                 final Integer partition = partitioner == null ? null : partitioner.apply(record);
                 publish(flowFile, additionalAttributes, messageKey, messageContent, topic, tracker, partition);

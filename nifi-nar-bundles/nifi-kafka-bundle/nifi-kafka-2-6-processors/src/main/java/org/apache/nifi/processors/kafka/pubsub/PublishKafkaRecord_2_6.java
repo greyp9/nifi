@@ -271,7 +271,12 @@ public class PublishKafkaRecord_2_6 extends AbstractProcessor implements Verifia
         .defaultValue("UTF-8")
         .required(false)
         .build();
-
+    static final PropertyDescriptor RECORD_KEY_WRITER = new PropertyDescriptor.Builder()
+            .name("record-key-writer")
+            .displayName("Record Key Writer")
+            .description("The Record Key Writer to use for outgoing FlowFiles")
+            .identifiesControllerService(RecordSetWriterFactory.class)
+            .build();
     static final Relationship REL_SUCCESS = new Relationship.Builder()
         .name("success")
         .description("FlowFiles for which all content was sent to Kafka.")
@@ -294,6 +299,7 @@ public class PublishKafkaRecord_2_6 extends AbstractProcessor implements Verifia
         properties.add(TOPIC);
         properties.add(RECORD_READER);
         properties.add(RECORD_WRITER);
+        properties.add(RECORD_KEY_WRITER);
         properties.add(USE_TRANSACTIONS);
         properties.add(TRANSACTIONAL_ID_PREFIX);
         properties.add(KafkaProcessorUtils.FAILURE_STRATEGY);
@@ -416,6 +422,7 @@ public class PublishKafkaRecord_2_6 extends AbstractProcessor implements Verifia
 
         final String charsetName = context.getProperty(MESSAGE_HEADER_ENCODING).evaluateAttributeExpressions().getValue();
         final Charset charset = Charset.forName(charsetName);
+        final RecordSetWriterFactory recordKeyWriterFactory = context.getProperty(RECORD_KEY_WRITER).asControllerService(RecordSetWriterFactory.class);
 
         final Map<String, Object> kafkaProperties = new HashMap<>();
         KafkaProcessorUtils.buildCommonKafkaProperties(context, ProducerConfig.class, kafkaProperties);
@@ -423,7 +430,8 @@ public class PublishKafkaRecord_2_6 extends AbstractProcessor implements Verifia
         kafkaProperties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         kafkaProperties.put("max.request.size", String.valueOf(maxMessageSize));
 
-        return new PublisherPool(kafkaProperties, getLogger(), maxMessageSize, maxAckWaitMillis, useTransactions, transactionalIdSupplier, attributeNamePattern, charset);
+        return new PublisherPool(kafkaProperties, getLogger(), maxMessageSize, maxAckWaitMillis,
+                useTransactions, transactionalIdSupplier, attributeNamePattern, charset, recordKeyWriterFactory);
     }
 
     @OnStopped
