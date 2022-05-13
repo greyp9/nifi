@@ -299,7 +299,6 @@ public class PublishKafkaRecord_2_6 extends AbstractProcessor implements Verifia
         properties.add(TOPIC);
         properties.add(RECORD_READER);
         properties.add(RECORD_WRITER);
-        properties.add(RECORD_KEY_WRITER);
         properties.add(USE_TRANSACTIONS);
         properties.add(TRANSACTIONAL_ID_PREFIX);
         properties.add(KafkaProcessorUtils.FAILURE_STRATEGY);
@@ -318,6 +317,7 @@ public class PublishKafkaRecord_2_6 extends AbstractProcessor implements Verifia
         properties.add(KafkaProcessorUtils.TOKEN_AUTH);
         properties.add(KafkaProcessorUtils.SSL_CONTEXT_SERVICE);
         properties.add(MESSAGE_KEY_FIELD);
+        properties.add(RECORD_KEY_WRITER);
         properties.add(MAX_REQUEST_SIZE);
         properties.add(ACK_WAIT_TIME);
         properties.add(METADATA_WAIT_TIME);
