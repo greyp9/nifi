@@ -32,7 +32,10 @@ public enum ProcessingFeature {
     SAX_NAMESPACE_PREFIXES("http://xml.org/sax/features/namespace-prefixes", true),
 
     /** Disallow Document Type Declaration */
-    DISALLOW_DOCTYPE_DECL("http://apache.org/xml/features/disallow-doctype-decl", true);
+    DISALLOW_DOCTYPE_DECL("http://apache.org/xml/features/disallow-doctype-decl", true),
+
+    /** Load External DTD */
+    LOAD_EXTERNAL_DTD("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
 
     private final String feature;
 

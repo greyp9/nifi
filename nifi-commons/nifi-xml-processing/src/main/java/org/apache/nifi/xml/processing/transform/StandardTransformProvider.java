@@ -47,6 +47,12 @@ public class StandardTransformProvider implements TransformProvider {
 
     private String method;
 
+    private String docTypePublic;
+
+    private String docTypeSystem;
+
+    private String encoding;
+
     /**
      * Set Indent Status
      *
@@ -72,6 +78,33 @@ public class StandardTransformProvider implements TransformProvider {
      */
     public void setOmitXmlDeclaration(final boolean omitXmlDeclaration) {
         this.omitXmlDeclaration = omitXmlDeclaration;
+    }
+
+    /**
+     * Set Public DocType
+     *
+     * @param docTypePublic public DocType for document
+     */
+    public void setDocTypePublic(final String docTypePublic) {
+        this.docTypePublic = docTypePublic;
+    }
+
+    /**
+     * Set System DocType
+     *
+     * @param docTypeSystem system DocType for document
+     */
+    public void setDocTypeSystem(final String docTypeSystem) {
+        this.docTypeSystem = docTypeSystem;
+    }
+
+    /**
+     * Set Document Encoding
+     *
+     * @param encoding character encoding for document
+     */
+    public void setEncoding(final String encoding) {
+        this.encoding = encoding;
     }
 
     /**
@@ -107,6 +140,18 @@ public class StandardTransformProvider implements TransformProvider {
 
         if (omitXmlDeclaration) {
             transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, ENABLED_PROPERTY);
+        }
+
+        if (docTypePublic != null) {
+            transformer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, docTypePublic);
+        }
+
+        if (docTypeSystem != null) {
+            transformer.setOutputProperty(OutputKeys.DOCTYPE_SYSTEM, docTypeSystem);
+        }
+
+        if (encoding != null) {
+            transformer.setOutputProperty(OutputKeys.ENCODING, encoding);
         }
 
         try {

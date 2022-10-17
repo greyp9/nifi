@@ -75,6 +75,7 @@ public class StandardDocumentProvider implements DocumentProvider {
         try {
             documentBuilderFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, ProcessingFeature.SECURE_PROCESSING.isEnabled());
             documentBuilderFactory.setFeature(ProcessingFeature.DISALLOW_DOCTYPE_DECL.getFeature(), ProcessingFeature.DISALLOW_DOCTYPE_DECL.isEnabled());
+            documentBuilderFactory.setFeature(ProcessingFeature.LOAD_EXTERNAL_DTD.getFeature(), ProcessingFeature.LOAD_EXTERNAL_DTD.isEnabled());
 
             final DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
             documentBuilder.setErrorHandler(errorHandler);
@@ -98,6 +99,7 @@ public class StandardDocumentProvider implements DocumentProvider {
         try {
             documentBuilderFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, ProcessingFeature.SECURE_PROCESSING.isEnabled());
             documentBuilderFactory.setFeature(ProcessingFeature.DISALLOW_DOCTYPE_DECL.getFeature(), isDisallowDocumentTypeDeclaration());
+            documentBuilderFactory.setFeature(ProcessingFeature.LOAD_EXTERNAL_DTD.getFeature(), ProcessingFeature.LOAD_EXTERNAL_DTD.isEnabled());
 
             final DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
             documentBuilder.setErrorHandler(errorHandler);

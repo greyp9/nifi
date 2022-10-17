@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+      http://www.apache.org/licenses/LICENSE-2.0
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<head>
+    <meta charset="utf-8"/>
+    <title>Coral</title>
+
+    <link rel="stylesheet" href="../../../../../css/component-usage.css" type="text/css"/>
+</head>
+<body>
+
+<h1>Coral Processor</h1>
+<p>When running, this processor provides a simple web interface at the port specified in the processor properties (by
+    default, port 18443). The <a href="https://localhost:18443">home page of the UI</a> provides access to the following
+    functionality:</p>
+<ul>
+    <li>View Processor State</li>
+    <li>Custom Routing of Outgoing FlowFile</li>
+    <li>Accept Incoming FlowFile</li>
+    <li>Create New FlowFile</li>
+</ul>
+<p>When not running, this processor is inert. It will not accept FlowFiles, nor will any FlowFiles be routed to any
+    downstream connections. It is only intended for manual use during flow development.</p>
+<p>The intent of this processor is to provide a simple means to debug flow behavior at runtime, allowing for manual add,
+    view, modify, and delete of individual FlowFiles in a running flow. It is not intended to run in a fully automated
+    flow, but it can be useful during flow development to modify attributes or content, to route FlowFiles in a custom
+    order.</p>
+
+<h2>View Processor State</h2>
+<p>FlowFiles are held in the context of the running processor. When the processor accepts an incoming FlowFile, it is
+    removed from the NiFi data repositories.</p>
+<p>When the processor is stopped, its running state is discarded, facilitating simple testing of flow functionality.</p>
+<p>All FlowFiles held by the processor are viewable in the FlowFile table available in the "View Processor State" page.
+    The following FlowFile aspects may be viewed from this table:</p>
+<ul>
+    <li>FlowFile Metadata (link) - view the FlowFile properties and attributes</li>
+    <li>FlowFile Content (link) - view the raw FlowFile bytes</li>
+    <li>FlowFile Creation Date</li>
+    <li>FlowFile Attribute Count</li>
+    <li>FlowFile Content Size</li>
+</ul>
+<p>From this view, the following actions may be performed on the FlowFile:</p>
+<ul>
+    <li>Clone the FlowFile (create a copy of it)</li>
+    <li>Drop the FlowFile (remove it from the state of the running processor)</li>
+    <li>Route the FlowFile to the specified destination relationship</li>
+</ul>
+<p>The destination relationships may be dynamically defined via the processor property "Relationships".</p>
+
+<h2>Accept Incoming FlowFile</h2>
+<p>This processor may be used as the outgoing relationship destination of another processor. If so configured, it will
+    accept FlowFiles for processing only upon manual intervention, via clicking the "Accept Incoming FlowFile" button on
+    the processor home page.</p>
+<p>The button increments an internal counter in the processor each time it is clicked. So, if
+    three FlowFiles should be consumed by Coral from upstream processors, the button should be clicked three times.</p>
+<p>Once added to the state of the running Coral processor, the FlowFile must be manually acted upon to remove it from
+    the processor state. It may be cloned, dropped, or routed to any defined outgoing relationship, based on user
+    action.</p>
+
+<h2>Create New FlowFile</h2>
+<p>This processor provides a simple interface to insert new FlowFiles into a running NiFi flow. Two modes are available
+    to add new FlowFiles:</p>
+<ul>
+    <li>enter custom FlowFile text (useful for textual FlowFile content, such as JSON or XML)</li>
+    <li>upload a custom FlowFile from a filesystem file (useful for binary FlowFile content, such as images or AVRO
+        records)
+    </li>
+</ul>
+
+<p>Both the "FlowFile from text" and "FlowFile from file upload" web pages provide an interface to specify arbitrary
+    FlowFile attributes.</p>
+<ul>
+    <li>To add a new attribute, specify the attribute name and value, and click the "Add" button.</li>
+    <li>To remove an existing attribute, specify the attribute name, and click the "Delete" button.</li>
+</ul>
+
+<h3>Enter Custom FlowFile Text</h3>
+<p>The FlowFile content may be specified by entering text in the "Content" text area on the page.</p>
+
+<h3>Upload Custom FlowFile File</h3>
+<p>The FlowFile content may be populated by uploading a file, using the "Choose File" button on the page. Once the file
+    is selected, click the "Upload Content" button to populate the in progress FlowFile content.</p>
+
+<h3>... Create New FlowFile</h3>
+<p>Once the desired content and attributes are specified, the "Create FlowFile" button may be clicked to add the
+    FlowFile to the processor state. To reset the content and attributes of the add screen, the "Reset FlowFile" button
+    may be clicked. The reset action only affects the editing state of the in progress FlowFile.</p>
+
+</body>
+</html>
