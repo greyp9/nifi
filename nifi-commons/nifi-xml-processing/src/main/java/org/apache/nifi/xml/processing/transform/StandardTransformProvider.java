@@ -109,6 +109,11 @@ public class StandardTransformProvider implements TransformProvider {
             transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, ENABLED_PROPERTY);
         }
 
+        // "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"
+        // needed for HTML validator (Firefox) 2011-11-13T23E
+        transformer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, "-//W3C//DTD XHTML 1.1//EN");
+        transformer.setOutputProperty(OutputKeys.DOCTYPE_SYSTEM, "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd");
+
         try {
             transformer.transform(source, result);
         } catch (final TransformerException e) {
