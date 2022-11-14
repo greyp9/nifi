@@ -18,6 +18,7 @@ package org.apache.nifi.processors.standard.coral;
 
 import org.apache.nifi.flowfile.FlowFile;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -49,6 +50,10 @@ public final class CoralState {
 
     public int incrementOut(final int amount) {
         return output.addAndGet(amount);
+    }
+
+    public List<FlowFile> getFlowFiles() {
+        return new ArrayList<>(flowFiles);
     }
 
     public int flowFileCount() {
