@@ -26,16 +26,25 @@ import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
+import org.apache.nifi.processors.standard.coral.core.CoralFlowFile;
+import org.apache.nifi.processors.standard.coral.core.CoralFlowFileRoute;
+import org.apache.nifi.processors.standard.coral.core.CoralState;
+import org.apache.nifi.processors.standard.coral.servlet.CoralContentServlet;
+import org.apache.nifi.processors.standard.coral.servlet.CoralCreateServlet;
+import org.apache.nifi.processors.standard.coral.servlet.CoralFlowfilesServlet;
+import org.apache.nifi.processors.standard.coral.servlet.CoralMetadataServlet;
+import org.apache.nifi.processors.standard.coral.servlet.CoralServlet;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 
+import javax.servlet.MultipartConfigElement;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 @TriggerWhenEmpty
@@ -45,7 +54,7 @@ public class Coral extends AbstractProcessor {
 
     @OnScheduled
     public void onScheduled(final ProcessContext context) {
-        coralState = new CoralState();
+        coralState = new CoralState(getRelationships());
 
         // https://www.eclipse.org/jetty/documentation/jetty-9/index.html#jetty-helloworld
         // https://stackoverflow.com/questions/39421686/jetty-pass-object-from-main-method-to-servlet
@@ -54,6 +63,11 @@ public class Coral extends AbstractProcessor {
         contextHandler.setContextPath("/");
         contextHandler.setAttribute(coralState.getClass().getName(), coralState);
         contextHandler.addServlet(CoralServlet.class, "/*");
+        contextHandler.addServlet(CoralFlowfilesServlet.class, "/flowfiles/*");
+        contextHandler.addServlet(CoralMetadataServlet.class, "/flowfile/metadata/*");
+        contextHandler.addServlet(CoralContentServlet.class, "/flowfile/content/*");
+        contextHandler.addServlet(CoralCreateServlet.class, "/flowfile/create/*").getRegistration()
+                .setMultipartConfig(new MultipartConfigElement(null, 1_048_576L, 1_048_576L, 1_048_576));
         server.setHandler(contextHandler);
 
         try {
@@ -90,15 +104,14 @@ public class Coral extends AbstractProcessor {
             }
         }
 
-        boolean produce = false;
-        if (coralState.shouldProduce()) {
-            final Optional<FlowFile> flowFileOptional = coralState.removeFlowFile();
-            if (flowFileOptional.isPresent()) {
-                final FlowFile flowFile = fromCoral(session, (CoralFlowFile) flowFileOptional.get());
-                session.transfer(flowFile, REL_A);
-                session.commit();
-                produce = true;
-            }
+        final List<CoralFlowFileRoute> flowFilesRouted = coralState.drainTo();
+        final boolean produce = !flowFilesRouted.isEmpty();
+        for (final CoralFlowFileRoute flowFile : flowFilesRouted) {
+            final FlowFile flowFileIt = fromCoral(session, flowFile.getCoralFlowFile());
+            session.transfer(flowFileIt, asRelationship(flowFile.getRelationship()));
+        }
+        if (produce) {
+            session.commit();
         }
 
         if ((!consume) && (!produce)) {
@@ -109,10 +122,11 @@ public class Coral extends AbstractProcessor {
     private CoralFlowFile toCoral(final ProcessSession session, final FlowFile flowFile) {
         try {
             final long id = flowFile.getId();
+            final long entryDate = flowFile.getEntryDate();
             final Map<String, String> attributes = flowFile.getAttributes();
             try (final InputStream read = session.read(flowFile)) {
                 final byte[] data = IOUtils.toByteArray(read);
-                return new CoralFlowFile(id, attributes, data);
+                return new CoralFlowFile(id, entryDate, attributes, data);
             }
         } catch (final IOException e) {
             throw new ProcessException(e);
@@ -123,6 +137,10 @@ public class Coral extends AbstractProcessor {
         FlowFile flowFile = session.create();
         flowFile = session.write(flowFile, out -> out.write(coralFlowFile.getData()));
         return session.putAllAttributes(flowFile, coralFlowFile.getAttributes());
+    }
+
+    private Relationship asRelationship(final String name) {
+        return relationships.stream().filter(r -> r.getName().equals(name)).findFirst().orElse(null);
     }
 
     public static final Relationship REL_A = new Relationship.Builder().name("A").description("Relationship A").build();

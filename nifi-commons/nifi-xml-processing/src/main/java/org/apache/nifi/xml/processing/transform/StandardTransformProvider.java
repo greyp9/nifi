@@ -113,6 +113,7 @@ public class StandardTransformProvider implements TransformProvider {
         // needed for HTML validator (Firefox) 2011-11-13T23E
         transformer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, "-//W3C//DTD XHTML 1.1//EN");
         transformer.setOutputProperty(OutputKeys.DOCTYPE_SYSTEM, "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd");
+        transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
 
         try {
             transformer.transform(source, result);
