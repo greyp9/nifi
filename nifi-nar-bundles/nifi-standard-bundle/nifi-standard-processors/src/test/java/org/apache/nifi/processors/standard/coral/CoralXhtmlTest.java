@@ -1,5 +1,6 @@
 package org.apache.nifi.processors.standard.coral;
 
+import org.apache.nifi.processors.standard.coral.core.CoralUtils;
 import org.apache.nifi.xml.processing.parsers.StandardDocumentProvider;
 import org.apache.nifi.xml.processing.transform.StandardTransformProvider;
 import org.junit.jupiter.api.Test;
@@ -13,14 +14,13 @@ import javax.xml.transform.Source;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 class CoralXhtmlTest {
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
     @Test
-    void testCreateWriteDocumentStandard() throws IOException {
+    void testCreateWriteDocumentStandard() {
         final StandardDocumentProvider provider = new StandardDocumentProvider();
         final Document document = provider.newDocument();
         final Element html = document.createElement("html");

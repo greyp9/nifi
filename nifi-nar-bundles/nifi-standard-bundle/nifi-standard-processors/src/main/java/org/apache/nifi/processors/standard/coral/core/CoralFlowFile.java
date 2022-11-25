@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.standard.coral;
+package org.apache.nifi.processors.standard.coral.core;
 
 import org.apache.nifi.flowfile.FlowFile;
 import org.jetbrains.annotations.NotNull;
@@ -25,11 +25,13 @@ import java.util.Map;
 public class CoralFlowFile implements FlowFile {
 
     private final long id;
+    private final long entryDate;
     private final Map<String, String> attributes;
     private final byte[] data;
 
-    public CoralFlowFile(final long id, final Map<String, String> attributes, final byte[] data) {
+    public CoralFlowFile(final long id, final long entryDate, final Map<String, String> attributes, final byte[] data) {
         this.id = id;
+        this.entryDate = entryDate;
         this.attributes = new HashMap<>(attributes);
         this.data = data;
     }
@@ -41,7 +43,7 @@ public class CoralFlowFile implements FlowFile {
 
     @Override
     public long getEntryDate() {
-        return 0L;
+        return entryDate;
     }
 
     @Override
@@ -76,7 +78,11 @@ public class CoralFlowFile implements FlowFile {
 
     @Override
     public long getSize() {
-        return data.length;
+        return (data == null) ? 0L : data.length;
+    }
+
+    public boolean isNull() {
+        return (data == null);
     }
 
     @Override
