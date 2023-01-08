@@ -29,7 +29,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.Part;
-import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Date;
@@ -62,6 +61,7 @@ public class CoralServlet extends HttpServlet {
         }
     }
 
+    @SuppressWarnings("RegExpRedundantEscape")
     private static final Pattern PATTERN = Pattern.compile("\\[(\\d+)\\]\\[(\\w+)\\]");
 
     @Override
@@ -87,7 +87,7 @@ public class CoralServlet extends HttpServlet {
             final String key = entry.getKey();
             for (final String value : entry.getValue()) {
                 if ("accept".equals(key) && ("flowfile".equals(value))) {
-                    coralState.incrementIn(1);
+                    coralState.incrementToConsume(1);
                 } else if ("route".equals(key)) {
                     final Matcher matcher = PATTERN.matcher(value);
                     if (matcher.matches()) {
@@ -153,7 +153,7 @@ public class CoralServlet extends HttpServlet {
 
         final Element divFooter = CoralUtils.addChild(body, "div", new Attribute("class", "footer"));
         final String textFooter = String.format("%s - count=%d - in=%d", new Date(),
-                coralState.flowFileCount(), coralState.incrementIn(0));
+                coralState.flowFileCount(), coralState.incrementToConsume(0));
         CoralUtils.addChild(divFooter, "span", textFooter);
 
         final byte[] xhtml = CoralUtils.toXml(document);

@@ -5,11 +5,11 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-public final class CoralFlowFileCreate {
+public final class CoralFlowFileCursor {
     private final Map<String, String> attributes;
     private final ByteArrayOutputStream content;
 
-    public CoralFlowFileCreate() {
+    public CoralFlowFileCursor() {
         this.attributes = new HashMap<>();
         this.content = new ByteArrayOutputStream();
     }
