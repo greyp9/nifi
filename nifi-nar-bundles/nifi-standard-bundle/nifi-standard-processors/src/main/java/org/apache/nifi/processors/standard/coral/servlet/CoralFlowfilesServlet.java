@@ -33,8 +33,10 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -69,7 +71,7 @@ public class CoralFlowfilesServlet extends HttpServlet {
             final String key = entry.getKey();
             for (final String value : entry.getValue()) {
                 if ("accept".equals(key) && ("flowfile".equals(value))) {
-                    coralState.incrementIn(1);
+                    coralState.incrementToConsume(1);
                 } else if ("route".equals(key)) {
                     final Matcher matcher = PATTERN.matcher(value);
                     if (matcher.matches()) {
@@ -77,12 +79,15 @@ public class CoralFlowfilesServlet extends HttpServlet {
                         final String relationship = matcher.group(2);
                         coralState.routeFlowFile(id, relationship);
                     }
-                } else if ("drop".equals(key)) {
+                } else if ("action".equals(key)) {
                     final Matcher matcher = PATTERN.matcher(value);
                     if (matcher.matches()) {
                         final String id = matcher.group(1);
-                        coralState.dropFlowFile(id);
+                        final String action = matcher.group(2);
+                        coralState.actionFlowFile(id, action);
                     }
+                //} else {
+                //    log(String.format("doPost()::%s=%s", key, value));
                 }
             }
         }
@@ -101,12 +106,13 @@ public class CoralFlowfilesServlet extends HttpServlet {
         CoralUtils.addChild(divHeader, "h1", "Coral Content - NiFi");
 
         final Element divContent = CoralUtils.addChild(body, "div", new Attribute("class", "content"));
+        final List<String> actions = Arrays.asList("CLONE", "DROP");
         final Set<String> relationships = coralState.getRelationships().stream()
                 .map(Relationship::getName).collect(Collectors.toSet());
-        addTable(divContent, relationships);
+        addTable(divContent, actions, relationships);
 
         final String text = String.format("%s - count=%d - in=%d", new Date(),
-                coralState.flowFileCount(), coralState.incrementIn(0));
+                coralState.flowFileCount(), coralState.incrementToConsume(0));
         CoralUtils.addChild(body, "div", text, new Attribute("class", "footer"));
 
         final byte[] xhtml = CoralUtils.toXml(document);
@@ -116,36 +122,34 @@ public class CoralFlowfilesServlet extends HttpServlet {
         response.getOutputStream().write(xhtml);
     }
 
-    private void addTable(final Element div, final Set<String> relationships) {
+    private void addTable(final Element div, final List<String> actions, final Set<String> relationships) {
         final Element form = CoralUtils.addChild(div, "form",
                 new Attribute("action", ""), new Attribute("method", "post"));
         final Element table = CoralUtils.addChild(form, "table", new Attribute("class", "table"));
 
         final Element thead = CoralUtils.addChild(table, "thead", new Attribute("class", "table"));
         final Element trHead = CoralUtils.addChild(thead, "tr");
-        CoralUtils.addChild(trHead, "th", "Metadata");
-        CoralUtils.addChild(trHead, "th", "Content");
-        CoralUtils.addChild(trHead, "th", "ID");
-        CoralUtils.addChild(trHead, "th", "Entry Date");
-        CoralUtils.addChild(trHead, "th", "Attributes");
-        CoralUtils.addChild(trHead, "th", "Size");
-        CoralUtils.addChild(trHead, "th", "Route");
+        final String[] columns = {"Metadata", "Content", "ID", "Entry Date", "Attributes", "Size", "Action", "Route"};
+        for (final String column : columns) {
+            CoralUtils.addChild(trHead, "th", column);
+        }
 
         final Element tfoot = CoralUtils.addChild(table, "tfoot", new Attribute("class", "table"));
         final Element trFoot = CoralUtils.addChild(tfoot, "tr");
         final String footer = String.format("%d flowfile(s)", coralState.flowFileCount());
-        CoralUtils.addChild(trFoot, "th", footer, new Attribute("colspan", "7"));
+        CoralUtils.addChild(trFoot, "th", footer, new Attribute("colspan", "8"));
 
         CoralUtils.addChild(table, "tbody", new Attribute("class", "table"));
         for (final FlowFile flowFile : coralState.getFlowFiles()) {
-            addRow(table, flowFile, relationships, null);
+            addRow(table, flowFile, actions, relationships, null);
         }
         for (final CoralFlowFileRoute flowFile : coralState.getFlowFilesRoute()) {
-            addRow(table, flowFile.getCoralFlowFile(), null, flowFile.getRelationship());
+            addRow(table, flowFile.getCoralFlowFile(), null, null, flowFile.getRelationship());
         }
     }
 
-    private void addRow(final Element table, final FlowFile flowFile, final Set<String> relationships, final String route) {
+    private void addRow(final Element table, final FlowFile flowFile,
+                        final List<String> actions, final Set<String> relationships, final String route) {
         final Element tr = CoralUtils.addChild(table, "tr");
 
         final Element tdMetadata = CoralUtils.addChild(tr, "td");
@@ -161,17 +165,27 @@ public class CoralFlowfilesServlet extends HttpServlet {
                 : (coralFlowFile.isNull() ? "-" :  Long.toString(flowFile.getSize()));
         CoralUtils.addChild(tr, "td", size, new Attribute("class", "right"));
 
+        final Element tdAction = CoralUtils.addChild(tr, "td");
+        if (actions == null) {
+            tdAction.setTextContent("-");
+        } else {
+            for (final String action : actions) {
+                final String accesskey = action.substring(0, 1);
+                final String value = String.format("[%d][%s]", flowFile.getId(), action);
+                CoralUtils.addChild(tdAction, "button", action, new Attribute("accesskey", accesskey),
+                        new Attribute("type", "submit"), new Attribute("name", "action"), new Attribute("value", value));
+            }
+        }
         final Element tdRoute = CoralUtils.addChild(tr, "td");
         if (relationships == null) {
             tdRoute.setTextContent(route);
         } else {
             for (final String relationship : relationships) {
+                final String accesskey = relationship.substring(0, 1);
                 final String value = String.format("[%d][%s]", flowFile.getId(), relationship);
-                CoralUtils.addChild(tdRoute, "button", relationship, new Attribute("accesskey", relationship),
+                CoralUtils.addChild(tdRoute, "button", relationship, new Attribute("accesskey", accesskey),
                         new Attribute("type", "submit"), new Attribute("name", "route"), new Attribute("value", value));
             }
-            CoralUtils.addChild(tdRoute, "button", "DROP", new Attribute("accesskey", "D"),
-                    new Attribute("type", "submit"), new Attribute("name", "route"), new Attribute("value", "DROP"));
         }
     }
 

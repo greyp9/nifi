@@ -21,24 +21,28 @@ import org.apache.nifi.processor.Relationship;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class CoralState {
-    public final AtomicInteger input;
+    private final AtomicLong nextFlowFileId;
+    private final AtomicInteger countToConsume;
     private final LinkedBlockingQueue<CoralFlowFile> flowFiles;
     private final Set<Relationship> relationships;
     private final LinkedBlockingQueue<CoralFlowFileRoute> flowFilesRoute;
-    private final CoralFlowFileCreate flowFileCreate;
+    private final CoralFlowFileCursor flowFileCursor;
 
     public CoralState(final Set<Relationship> relationships) {
-        this.input = new AtomicInteger(0);
+        this.nextFlowFileId = new AtomicLong(0);
+        this.countToConsume = new AtomicInteger(0);
         this.flowFiles = new LinkedBlockingQueue<>();
         this.relationships = relationships;
         this.flowFilesRoute = new LinkedBlockingQueue<>();
-        this.flowFileCreate = new CoralFlowFileCreate();
+        this.flowFileCursor = new CoralFlowFileCursor();
     }
 
     public Set<Relationship> getRelationships() {
@@ -46,11 +50,11 @@ public final class CoralState {
     }
 
     public boolean shouldConsume() {
-        return (input.get() > 0);
+        return (countToConsume.get() > 0);
     }
 
-    public int incrementIn(final int amount) {
-        return input.addAndGet(amount);
+    public int incrementToConsume(final int amount) {
+        return countToConsume.addAndGet(amount);
     }
 
     public List<FlowFile> getFlowFiles() {
@@ -61,23 +65,23 @@ public final class CoralState {
         return new ArrayList<>(flowFilesRoute);
     }
 
-    public CoralFlowFileCreate getCreate() { return flowFileCreate; }
+    public CoralFlowFileCursor getFlowFileCursor() { return flowFileCursor; }
 
     public int flowFileCount() {
         return flowFiles.size();
+    }
+
+    public CoralFlowFile create(long entryDate, Map<String, String> attributes, byte[] data) {
+        return new CoralFlowFile(nextFlowFileId.incrementAndGet(), entryDate, attributes, data);
     }
 
     public void createFlowFile(final CoralFlowFile flowFile) {
         flowFiles.add(flowFile);
     }
 
-    public boolean addFlowFile(final CoralFlowFile flowFile) {
-        final boolean toAdd = ((flowFile != null) && (input.get() > 0));
-        if (toAdd) {
-            flowFiles.add(flowFile);
-            input.decrementAndGet();
-        }
-        return toAdd;
+    public void consumeFlowFile(final CoralFlowFile flowFile) {
+        flowFiles.add(flowFile);
+        countToConsume.decrementAndGet();
     }
 
     public Optional<CoralFlowFile> getFlowFile(final String idString) {
@@ -95,7 +99,21 @@ public final class CoralState {
         );
     }
 
-    public void dropFlowFile(final String idString) {
+    public void actionFlowFile(final String idString, final String action) {
+        if ("CLONE".equals(action)) {
+            cloneFlowFile(idString);
+        } else if ("DROP".equals(action)) {
+            dropFlowFile(idString);
+        }
+    }
+
+    private void cloneFlowFile(final String idString) {
+        final long id = Long.parseLong(idString);
+        final Optional<CoralFlowFile> flowFile = flowFiles.stream().filter(ff -> ff.getId() == id).findFirst();
+        flowFile.ifPresent(ff -> createFlowFile(create(System.currentTimeMillis(), ff.getAttributes(), ff.getData())));
+    }
+
+    private void dropFlowFile(final String idString) {
         final long id = Long.parseLong(idString);
         final Optional<CoralFlowFile> flowFile = flowFiles.stream().filter(ff -> ff.getId() == id).findFirst();
         flowFile.ifPresent(flowFiles::remove);

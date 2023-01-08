@@ -18,8 +18,7 @@ package org.apache.nifi.processors.standard.coral.servlet;
 
 import org.apache.commons.codec.binary.Hex;
 import org.apache.nifi.processors.standard.coral.core.Attribute;
-import org.apache.nifi.processors.standard.coral.core.CoralFlowFile;
-import org.apache.nifi.processors.standard.coral.core.CoralFlowFileCreate;
+import org.apache.nifi.processors.standard.coral.core.CoralFlowFileCursor;
 import org.apache.nifi.processors.standard.coral.core.CoralState;
 import org.apache.nifi.processors.standard.coral.core.CoralUtils;
 import org.slf4j.Logger;
@@ -65,28 +64,28 @@ public class CoralCreateServlet extends HttpServlet {
             logger.trace("no Content-Type header");
         } else if (contentType.equals("application/x-www-form-urlencoded")) {
             final Map<String, String[]> parameters = request.getParameterMap();
-            final CoralFlowFileCreate flowFileCreate = coralState.getCreate();
+            final CoralFlowFileCursor flowFileCursor = coralState.getFlowFileCursor();
 
             if (parameters.containsKey("addAttribute")) {
                 final String name = request.getParameter("name");
                 final String value = request.getParameter("value");
                 if (!name.isEmpty() && !value.isEmpty()) {
-                    flowFileCreate.setAttribute(name, value);
+                    flowFileCursor.setAttribute(name, value);
                 }
             } else if (parameters.containsKey("deleteAttribute")) {
                 final String name = request.getParameter("name");
-                flowFileCreate.removeAttribute(name);
+                flowFileCursor.removeAttribute(name);
             } else if (parameters.containsKey("updateText")) {
                 // https://www.w3.org/TR/html401/interact/forms.html#h-17.13.4.1
                 final String text = request.getParameter("text").replaceAll("\r\n", "\n");
                 logger.warn(Hex.encodeHexString(CoralUtils.toBytesUTF8(text)));
-                flowFileCreate.setContent(CoralUtils.toBytesUTF8(text));
+                flowFileCursor.setContent(CoralUtils.toBytesUTF8(text));
             } else if (parameters.containsKey("create")) {
-                final Map<String, String> attributes = flowFileCreate.getAttributes();
-                final byte[] content = flowFileCreate.getContent().toByteArray();
-                coralState.createFlowFile(new CoralFlowFile(0L, System.currentTimeMillis(), attributes, content));
+                final Map<String, String> attributes = flowFileCursor.getAttributes();
+                final byte[] content = flowFileCursor.getContent().toByteArray();
+                coralState.createFlowFile(coralState.create(System.currentTimeMillis(), attributes, content));
             } else if (parameters.containsKey("reset")) {
-                flowFileCreate.reset();
+                flowFileCursor.reset();
             }
         } else if (contentType.startsWith("multipart/form-data")) {
             final Collection<Part> parts = request.getParts();
@@ -95,7 +94,7 @@ public class CoralCreateServlet extends HttpServlet {
                     final byte[] bytes = CoralUtils.toBytes(part.getInputStream());
                     logger.warn("UPLOAD: file=[{}], size=[{}], sha256=[{}]",
                             part.getName(), bytes.length, CoralUtils.sha256(bytes));
-                    coralState.getCreate().setContent(bytes);
+                    coralState.getFlowFileCursor().setContent(bytes);
                 }
             }
         }
@@ -111,8 +110,8 @@ public class CoralCreateServlet extends HttpServlet {
                 new Attribute("rel", "stylesheet"), new Attribute("type", "text/css"));
         final Element body = CoralUtils.addChild(document.getDocumentElement(), "body");
 
-        addTableMetadata(CoralUtils.addChild(body, "div"), coralState.getCreate());
-        addTableAttributes(CoralUtils.addChild(body, "div", new Attribute("class", "content")), coralState.getCreate().getAttributes());
+        addTableMetadata(CoralUtils.addChild(body, "div"), coralState.getFlowFileCursor());
+        addTableAttributes(CoralUtils.addChild(body, "div", new Attribute("class", "content")), coralState.getFlowFileCursor().getAttributes());
 
         final Element divFormAddAttribute = CoralUtils.addChild(body, "div", new Attribute("class", "form"));
         CoralUtils.addChild(divFormAddAttribute, "h2", "Attribute");
@@ -140,7 +139,7 @@ public class CoralCreateServlet extends HttpServlet {
             final Element formEdit = CoralUtils.addChild(divFormEdit, "form",
                     new Attribute("action", ""), new Attribute("method", "post"));
             final Element divFormEdit1 = CoralUtils.addChild(formEdit, "div");
-            final String contentFlowFile = CoralUtils.fromBytesUTF8(coralState.getCreate().getContent().toByteArray());
+            final String contentFlowFile = CoralUtils.fromBytesUTF8(coralState.getFlowFileCursor().getContent().toByteArray());
             final String content = contentFlowFile.isEmpty() ? "\n" : contentFlowFile;
             CoralUtils.addChild(divFormEdit1, "textarea", content, new Attribute("placeholder", "enter text"), new Attribute("rows", "12"), new Attribute("cols", "132"), new Attribute("name", "text"));
             final Element divFormEdit2 = CoralUtils.addChild(formEdit, "div");
@@ -164,7 +163,7 @@ public class CoralCreateServlet extends HttpServlet {
         response.getOutputStream().write(xhtml);
     }
 
-    private void addTableMetadata(final Element div, final CoralFlowFileCreate create) {
+    private void addTableMetadata(final Element div, final CoralFlowFileCursor flowFileCursor) {
         CoralUtils.addChild(div, "h2", "Metadata");
         final Element table = CoralUtils.addChild(div, "table", new Attribute("class", "table"));
         final Element thead = CoralUtils.addChild(table, "thead", new Attribute("class", "table"));
@@ -173,7 +172,7 @@ public class CoralCreateServlet extends HttpServlet {
         CoralUtils.addChild(trHead, "th", "Value");
 
         final Element tbody = CoralUtils.addChild(table, "tbody", new Attribute("class", "table"));
-        addRow(tbody, "Size (Bytes)", create.getContent().toByteArray().length);
+        addRow(tbody, "Size (Bytes)", flowFileCursor.getContent().toByteArray().length);
     }
 
     private void addTableAttributes(final Element div, final Map<String, String> attributes) {

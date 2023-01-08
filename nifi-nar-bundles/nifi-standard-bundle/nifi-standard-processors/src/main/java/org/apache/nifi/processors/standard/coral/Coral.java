@@ -18,14 +18,19 @@ package org.apache.nifi.processors.standard.coral;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.nifi.annotation.behavior.TriggerWhenEmpty;
+import org.apache.nifi.annotation.documentation.CapabilityDescription;
+import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnUnscheduled;
+import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
+import org.apache.nifi.processor.ProcessorInitializationContext;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
+import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.processors.standard.coral.core.CoralFlowFile;
 import org.apache.nifi.processors.standard.coral.core.CoralFlowFileRoute;
 import org.apache.nifi.processors.standard.coral.core.CoralState;
@@ -40,17 +45,57 @@ import org.eclipse.jetty.servlet.ServletContextHandler;
 import javax.servlet.MultipartConfigElement;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
+@CapabilityDescription("Provide interactivity to manually debug a NiFi flow")
+@Tags({"debug", "routing"})
 @TriggerWhenEmpty
 public class Coral extends AbstractProcessor {
+
+    public static final PropertyDescriptor PORT = new PropertyDescriptor.Builder()
+            .name("Port")
+            .description("The port to listen on for incoming connections")
+            .required(true)
+            .addValidator(StandardValidators.PORT_VALIDATOR)
+            .defaultValue("18080")
+            .build();
+    public static final PropertyDescriptor RELATIONSHIPS = new PropertyDescriptor.Builder()
+            .name("Relationships")
+            .description("The (dynamic) set of outgoing relationships")
+            .required(true)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .defaultValue("Outgoing")
+            .build();
+
     private CoralState coralState;
     private Server server;
+
+    @Override
+    protected List<PropertyDescriptor> getSupportedPropertyDescriptors() {
+        final List<PropertyDescriptor> properties = new ArrayList<>();
+        properties.add(PORT);
+        properties.add(RELATIONSHIPS);
+        return properties;
+    }
+
+    @Override
+    protected void init(final ProcessorInitializationContext context) {
+        final Set<Relationship> set = new HashSet<>();
+        set.add(REL_OUTGOING);
+        relationships = new AtomicReference<>(set);
+    }
+
+    @Override
+    public void onPropertyModified(final PropertyDescriptor descriptor, final String oldValue, final String newValue) {
+        if (descriptor.equals(RELATIONSHIPS)) {
+            relationships.set(toRelationships(newValue));
+        }
+    }
 
     @OnScheduled
     public void onScheduled(final ProcessContext context) {
@@ -58,7 +103,11 @@ public class Coral extends AbstractProcessor {
 
         // https://www.eclipse.org/jetty/documentation/jetty-9/index.html#jetty-helloworld
         // https://stackoverflow.com/questions/39421686/jetty-pass-object-from-main-method-to-servlet
-        server = new Server(18080);
+        server = new Server(context.getProperty(PORT).asInteger());
+        relationships.set(toRelationships(context.getProperty(RELATIONSHIPS).getValue()));
+        //org.eclipse.jetty.util.ssl.SslContextFactory
+        //final SslContextFactory sslContextFactory = new SslContextFactory.Server();
+        //sslContextFactory.setKeyStorePath("conf/keystore.p12");
         final ServletContextHandler contextHandler = new ServletContextHandler();
         contextHandler.setContextPath("/");
         contextHandler.setAttribute(coralState.getClass().getName(), coralState);
@@ -77,6 +126,7 @@ public class Coral extends AbstractProcessor {
         }
     }
 
+    @SuppressWarnings("unused")
     @OnUnscheduled
     public void OnUnscheduled(final ProcessContext context) {
         try {
@@ -95,7 +145,7 @@ public class Coral extends AbstractProcessor {
         if (coralState.shouldConsume()) {
             final FlowFile flowFile = session.get();
             if (flowFile != null) {
-                coralState.addFlowFile(toCoral(session, flowFile));
+                coralState.consumeFlowFile(toCoral(session, flowFile));
                 session.remove(flowFile);
                 session.commit();
                 consume = true;
@@ -121,12 +171,12 @@ public class Coral extends AbstractProcessor {
 
     private CoralFlowFile toCoral(final ProcessSession session, final FlowFile flowFile) {
         try {
-            final long id = flowFile.getId();
             final long entryDate = flowFile.getEntryDate();
             final Map<String, String> attributes = flowFile.getAttributes();
+            attributes.put("ffId", Long.toString(flowFile.getId()));
             try (final InputStream read = session.read(flowFile)) {
                 final byte[] data = IOUtils.toByteArray(read);
-                return new CoralFlowFile(id, entryDate, attributes, data);
+                return coralState.create(entryDate, attributes, data);
             }
         } catch (final IOException e) {
             throw new ProcessException(e);
@@ -139,19 +189,29 @@ public class Coral extends AbstractProcessor {
         return session.putAllAttributes(flowFile, coralFlowFile.getAttributes());
     }
 
-    private Relationship asRelationship(final String name) {
-        return relationships.stream().filter(r -> r.getName().equals(name)).findFirst().orElse(null);
+    private Set<Relationship> toRelationships(final String config) {
+        final Set<Relationship> relationshipsUpdate = new HashSet<>();
+        final String[] names = config.split(",");
+        if (names.length == 0) {
+            relationshipsUpdate.add(REL_OUTGOING);
+        } else {
+            for (String name : names) {
+                relationshipsUpdate.add(new Relationship.Builder().name(name).build());
+            }
+        }
+        return relationshipsUpdate;
     }
 
-    public static final Relationship REL_A = new Relationship.Builder().name("A").description("Relationship A").build();
-    public static final Relationship REL_B = new Relationship.Builder().name("B").description("Relationship B").build();
-    public static final Relationship REL_C = new Relationship.Builder().name("C").description("Relationship C").build();
+    private Relationship asRelationship(final String name) {
+        return getRelationships().stream().filter(r -> r.getName().equals(name)).findFirst().orElse(null);
+    }
 
-    public static final Set<Relationship> relationships = Collections.unmodifiableSet(
-            new HashSet<>(Arrays.asList(REL_A, REL_B, REL_C)));
+    public static final Relationship REL_OUTGOING = new Relationship.Builder().name("Outgoing").description("Default Relationship").build();
+
+    private AtomicReference<Set<Relationship>> relationships = new AtomicReference<>();
 
     @Override
     public Set<Relationship> getRelationships() {
-        return relationships;
+        return relationships.get();
     }
 }
