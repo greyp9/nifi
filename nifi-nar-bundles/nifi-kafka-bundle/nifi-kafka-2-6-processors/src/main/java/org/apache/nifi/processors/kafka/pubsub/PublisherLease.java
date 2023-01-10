@@ -46,6 +46,7 @@ import org.apache.nifi.serialization.record.RecordField;
 import org.apache.nifi.serialization.record.RecordFieldType;
 import org.apache.nifi.serialization.record.RecordSchema;
 import org.apache.nifi.serialization.record.RecordSet;
+import org.apache.nifi.serialization.record.type.RecordDataType;
 import org.apache.nifi.stream.io.StreamUtils;
 import org.apache.nifi.stream.io.exception.TokenTooLargeException;
 import org.apache.nifi.stream.io.util.StreamDemarcator;
@@ -186,7 +187,7 @@ public class PublisherLease implements Closeable {
         }
     }
 
-    void publish(final FlowFile flowFile, final RecordSet recordSet, final RecordSetWriterFactory writerFactory, final RecordSchema schema,
+    void publish(final FlowFile flowFile, final RecordSet recordSet, final RecordSetWriterFactory writerFactory, RecordSchema schema,
                  final String messageKeyField, final String explicitTopic, final Function<Record, Integer> partitioner, final PublishMetadataStrategy metadataStrategy) throws IOException {
         if (tracker == null) {
             tracker = new InFlightMessageTracker(logger);
@@ -198,7 +199,7 @@ public class PublisherLease implements Closeable {
         int recordCount = 0;
 
         try {
-            final RecordSchema schemaKey = (recordKeyWriterFactory == null)
+            RecordSchema schemaKey = (recordKeyWriterFactory == null)
                     ? null : recordKeyWriterFactory.getSchema(flowFile.getAttributes(), recordSet.getSchema());
             while ((record = recordSet.next()) != null) {
                 recordCount++;
@@ -213,6 +214,20 @@ public class PublisherLease implements Closeable {
                     headers = toHeadersWrapper(record.getValue("headers"));
                     final Object key = record.getValue("key");
                     final Object value = record.getValue("value");
+
+
+
+                    final Optional<RecordField> recordFieldKey = schema.getField("key");
+                    if  ((recordFieldKey.isPresent()) && (recordFieldKey.get().getDataType() instanceof RecordDataType)) {
+                        schemaKey = ((RecordDataType) recordFieldKey.get().getDataType()).getChildSchema();
+                    }
+                    final Optional<RecordField> recordFieldValue = schema.getField("value");
+                    if  ((recordFieldValue.isPresent()) && (recordFieldValue.get().getDataType() instanceof RecordDataType)) {
+                        schema = ((RecordDataType) recordFieldValue.get().getDataType()).getChildSchema();
+                    }
+
+
+
                     messageContent = toByteArray("value", value, writerFactory, schema, flowFile);
                     messageKey = toByteArray("key", key, recordKeyWriterFactory, schemaKey, flowFile);
 

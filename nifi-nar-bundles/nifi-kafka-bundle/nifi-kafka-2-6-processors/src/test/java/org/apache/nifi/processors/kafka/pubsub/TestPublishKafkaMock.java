@@ -188,8 +188,9 @@ public class TestPublishKafkaMock {
         assertEquals("attrValueB", new String(headers.lastHeader("attrKeyB").value(), UTF_8));
         assertNull(record.key());
         assertNotNull(record.value());
-        final String valueString = mapper.writeValueAsString(valueNode);
-        assertEquals(valueString, new String(record.value(), UTF_8));
+        final String valueStringExpected = mapper.writeValueAsString(valueNode);
+        final String valueStringActual = new String(record.value(), UTF_8);
+        assertEquals(valueStringExpected, valueStringActual);
     }
 
     @Test
@@ -290,7 +291,7 @@ public class TestPublishKafkaMock {
         final TestRunner runner = getTestRunner(producedRecords);
         runner.setProperty("topic", TEST_TOPIC_PUBLISH);
         runner.setProperty("publish-strategy", PublishStrategy.USE_WRAPPER.name());
-        runner.setProperty("record-key-writer", "record-writer");
+        runner.setProperty("record-key-writer", "record-key-writer");
         runner.enqueue(flowFile);
         runner.run(1);
         // verify results
@@ -301,11 +302,13 @@ public class TestPublishKafkaMock {
         final Headers headers = record.headers();
         assertEquals(0, headers.toArray().length);
         assertNotNull(record.key());
-        final String keyString = mapper.writeValueAsString(keyNode);
-        assertEquals(keyString, new String(record.key(), UTF_8));
+        final String keyStringExpected = mapper.writeValueAsString(keyNode);
+        final String keyStringActual = new String(record.key(), UTF_8);
+        assertEquals(keyStringExpected, keyStringActual);
         assertNotNull(record.value());
-        final String valueString = mapper.writeValueAsString(valueNode);
-        assertEquals(valueString, new String(record.value(), UTF_8));
+        final String valueStringExpected = mapper.writeValueAsString(valueNode);
+        final String valueStringActual = new String(record.value(), UTF_8);
+        assertEquals(valueStringExpected, valueStringActual);
     }
 
     private TestRunner getTestRunner(final Collection<ProducerRecord<byte[], byte[]>> producedRecords)
@@ -341,14 +344,14 @@ public class TestPublishKafkaMock {
         // create flowfile to publish
         final Map<String, String> attributes = new TreeMap<>();
         attributes.put("schema-access-strategy", "schema-name");
-        attributes.put("schema.name", "schemaRecord");
+        attributes.put("schema.name", "schemaValue");
         attributes.put("schema.key.name", "schemaKey");
         final ObjectNode recordKey = mapper.createObjectNode()
-                .put("key1", "value1")
-                .put("key2", "value2");
+                .put("keyA", "value1")
+                .put("keyB", "value2");
         final ObjectNode recordValue = mapper.createObjectNode()
-                .put("value1", "value1")
-                .put("value2", "value2");
+                .put("valueA", "value1")
+                .put("valueB", "value2");
         final ObjectNode record = mapper.createObjectNode();
         record.set("key", recordKey);
         record.set("value", recordValue);
@@ -361,7 +364,6 @@ public class TestPublishKafkaMock {
         final TestRunner runner = getTestRunnerSchemaRegistry(producedRecords);
         runner.setProperty("topic", TEST_TOPIC_PUBLISH);
         runner.setProperty("publish-strategy", PublishStrategy.USE_WRAPPER.name());
-        runner.setProperty("message-key-field", "key");
         runner.setProperty("record-key-writer", "record-key-writer");
         runner.enqueue(flowFile);
         runner.run(1);
@@ -372,42 +374,42 @@ public class TestPublishKafkaMock {
         final DataFileStream<GenericData.Record> dataReaderKey = new DataFileStream<>(
                 new ByteArrayInputStream(producerRecord.key()), new GenericDatumReader<>(null));
         final GenericData.Record genericRecordKey = dataReaderKey.next();
-        assertEquals("value1", genericRecordKey.get("key1").toString());
-        assertEquals("value2", genericRecordKey.get("key2").toString());
-        assertEquals("value3", genericRecordKey.get("key3").toString());
+        assertEquals("value1", genericRecordKey.get("keyA").toString());
+        assertEquals("value2", genericRecordKey.get("keyB").toString());
+        assertEquals("value3", genericRecordKey.get("keyC").toString());
 
         final DataFileStream<GenericData.Record> dataReaderValue = new DataFileStream<>(
                 new ByteArrayInputStream(producerRecord.value()), new GenericDatumReader<>(null));
         final GenericData.Record genericRecordValue = dataReaderValue.next();
-        assertEquals("value1", genericRecordValue.get("value1").toString());
-        assertEquals("value2", genericRecordValue.get("value2").toString());
-        assertEquals("value3", genericRecordValue.get("value3").toString());
+        assertEquals("value1", genericRecordValue.get("valueA").toString());
+        assertEquals("value2", genericRecordValue.get("valueB").toString());
+        assertEquals("value3", genericRecordValue.get("valueC").toString());
     }
 
     private TestRunner getTestRunnerSchemaRegistry(final Collection<ProducerRecord<byte[], byte[]>> producedRecords)
             throws InitializationException {
         final RecordSchema schemaKey = new SimpleRecordSchema(Arrays.asList(
-                new RecordField("key1", RecordFieldType.STRING.getDataType()),
-                new RecordField("key2", RecordFieldType.STRING.getDataType()),
-                new RecordField("key3", RecordFieldType.STRING.getDataType(), "value3")));
+                new RecordField("keyA", RecordFieldType.STRING.getDataType()),
+                new RecordField("keyB", RecordFieldType.STRING.getDataType()),
+                new RecordField("keyC", RecordFieldType.STRING.getDataType(), "value3")));
         final RecordSchema schemaValue = new SimpleRecordSchema(Arrays.asList(
-                new RecordField("value1", RecordFieldType.STRING.getDataType()),
-                new RecordField("value2", RecordFieldType.STRING.getDataType()),
-                new RecordField("value3", RecordFieldType.STRING.getDataType(), "value3")));
+                new RecordField("valueA", RecordFieldType.STRING.getDataType()),
+                new RecordField("valueB", RecordFieldType.STRING.getDataType()),
+                new RecordField("valueC", RecordFieldType.STRING.getDataType(), "value3")));
         final RecordSchema schemaRecord = new SimpleRecordSchema(Arrays.asList(
                 new RecordField("key", RecordFieldType.RECORD.getRecordDataType(schemaKey)),
                 new RecordField("value", RecordFieldType.RECORD.getRecordDataType(schemaValue))));
 
         final String schemaRegistryId = "schema-registry";
         final MockSchemaRegistry schemaRegistry = new MockSchemaRegistry();
+        schemaRegistry.addSchema("schemaKey", schemaKey);
+        schemaRegistry.addSchema("schemaValue", schemaValue);
         schemaRegistry.addSchema("schemaRecord", schemaRecord);
 
         final String readerId = "record-reader";
         final RecordReaderFactory readerService = new JsonTreeReader();
 
         final Map<String, String> propertiesReaderService = new TreeMap<>();
-        propertiesReaderService.put(schemaRegistryId, schemaRegistryId);
-        propertiesReaderService.put("schema-access-strategy", "schema-name");
 
         final String writerId = "record-writer";
         final RecordSetWriterFactory writerService = new AvroRecordSetWriter();
@@ -415,8 +417,13 @@ public class TestPublishKafkaMock {
         final RecordSetWriterFactory keyWriterService = new AvroRecordSetWriter();
 
         final Map<String, String> propertiesWriterService = new TreeMap<>();
-        //propertiesWriterService.put(schemaRegistryId, schemaRegistryId);
-        //propertiesWriterService.put("schema-access-strategy", "schema-name");
+        propertiesWriterService.put(schemaRegistryId, schemaRegistryId);
+        propertiesWriterService.put("schema-access-strategy", "schema-name");
+        propertiesWriterService.put("schema-name", "schemaValue");
+        final Map<String, String> propertiesWriterServiceKey = new TreeMap<>();
+        propertiesWriterServiceKey.put(schemaRegistryId, schemaRegistryId);
+        propertiesWriterServiceKey.put("schema-access-strategy", "schema-name");
+        propertiesWriterServiceKey.put("schema-name", "schemaKey");
 
         final PublishKafkaRecord_2_6 processor = new PublishKafkaRecord_2_6() {
             @Override
@@ -438,7 +445,7 @@ public class TestPublishKafkaMock {
         runner.enableControllerService(writerService);
         runner.setProperty(writerId, writerId);
 
-        runner.addControllerService(keyWriterId, keyWriterService, propertiesWriterService);
+        runner.addControllerService(keyWriterId, keyWriterService, propertiesWriterServiceKey);
         runner.enableControllerService(keyWriterService);
         runner.setProperty(keyWriterId, keyWriterId);
 

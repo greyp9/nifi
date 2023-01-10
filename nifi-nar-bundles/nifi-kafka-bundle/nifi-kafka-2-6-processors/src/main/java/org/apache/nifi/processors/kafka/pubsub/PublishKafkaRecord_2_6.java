@@ -541,7 +541,12 @@ public class PublishKafkaRecord_2_6 extends AbstractProcessor implements KafkaPu
                             try {
                                 final RecordReader reader = readerFactory.createRecordReader(flowFile, in, getLogger());
                                 final RecordSet recordSet = reader.createRecordSet();
-
+                                //
+                                //
+                                // NIFI-10993
+                                // should not propagate reader schema to be writer schema
+                                //
+                                //
                                 final RecordSchema schema = writerFactory.getSchema(flowFile.getAttributes(), recordSet.getSchema());
                                 lease.publish(flowFile, recordSet, writerFactory, schema, messageKeyField, topic, partitioner, publishMetadataStrategy);
                             } catch (final SchemaNotFoundException | MalformedRecordException e) {
