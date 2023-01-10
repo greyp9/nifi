@@ -198,6 +198,8 @@ public class PublisherLease implements Closeable {
         int recordCount = 0;
 
         try {
+            final RecordSchema schemaKey = (recordKeyWriterFactory == null)
+                    ? null : recordKeyWriterFactory.getSchema(flowFile.getAttributes(), recordSet.getSchema());
             while ((record = recordSet.next()) != null) {
                 recordCount++;
                 baos.reset();
@@ -211,8 +213,8 @@ public class PublisherLease implements Closeable {
                     headers = toHeadersWrapper(record.getValue("headers"));
                     final Object key = record.getValue("key");
                     final Object value = record.getValue("value");
-                    messageContent = toByteArray("value", value, writerFactory, flowFile);
-                    messageKey = toByteArray("key", key, recordKeyWriterFactory, flowFile);
+                    messageContent = toByteArray("value", value, writerFactory, schema, flowFile);
+                    messageKey = toByteArray("key", key, recordKeyWriterFactory, schemaKey, flowFile);
 
                     if (metadataStrategy == PublishMetadataStrategy.USE_RECORD_METADATA) {
                         final Object metadataObject = record.getValue("metadata");
@@ -345,7 +347,7 @@ public class PublisherLease implements Closeable {
         return headers;
     }
 
-    private byte[] toByteArray(final String name, final Object object, final RecordSetWriterFactory writerFactory, final FlowFile flowFile)
+    private byte[] toByteArray(final String name, final Object object, final RecordSetWriterFactory writerFactory, final RecordSchema schema, final FlowFile flowFile)
             throws IOException, SchemaNotFoundException, MalformedRecordException {
         if (object == null) {
             return null;
@@ -356,7 +358,6 @@ public class PublisherLease implements Closeable {
             }
 
             final Record record = (Record) object;
-            final RecordSchema schema = writerFactory.getSchema(Collections.emptyMap(), record.getSchema());
             try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
                  final RecordSetWriter writer = writerFactory.createWriter(logger, schema, baos, flowFile)) {
                 writer.write(record);
