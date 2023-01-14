@@ -44,7 +44,7 @@ public class CoralContentServlet extends HttpServlet {
 
     @Override
     protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws IOException {
-        logger.warn("GET {}", request.getRequestURI());
+        logger.trace("GET {}", request.getRequestURI());
         final Matcher matcher = PATTERN.matcher(request.getRequestURI());
         if (matcher.matches()) {
             final Optional<CoralFlowFile> flowFile = coralState.getFlowFile(matcher.group(1));

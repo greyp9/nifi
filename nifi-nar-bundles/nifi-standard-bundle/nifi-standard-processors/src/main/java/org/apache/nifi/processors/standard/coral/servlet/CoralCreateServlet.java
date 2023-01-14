@@ -32,6 +32,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.Part;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -50,7 +51,7 @@ public class CoralCreateServlet extends HttpServlet {
 
     @Override
     protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws IOException {
-        logger.warn("GET {}", request.getRequestURI());
+        logger.trace("GET {}", request.getRequestURI());
         final boolean textUI = !request.getRequestURI().contains("/file");
         final boolean fileUI = !request.getRequestURI().contains("/text");
         doGetHtml(textUI, fileUI, response);
@@ -58,7 +59,7 @@ public class CoralCreateServlet extends HttpServlet {
 
     @Override
     protected void doPost(final HttpServletRequest request, final HttpServletResponse response) throws ServletException, IOException {
-        logger.warn("POST {}", request.getRequestURI());
+        logger.trace("POST {}", request.getRequestURI());
         final String contentType = request.getHeader("Content-Type");
         if (contentType == null) {
             logger.trace("no Content-Type header");
@@ -78,7 +79,9 @@ public class CoralCreateServlet extends HttpServlet {
             } else if (parameters.containsKey("updateText")) {
                 // https://www.w3.org/TR/html401/interact/forms.html#h-17.13.4.1
                 final String text = request.getParameter("text").replaceAll("\r\n", "\n");
-                logger.warn(Hex.encodeHexString(CoralUtils.toBytesUTF8(text)));
+                logger.trace("TEXT: size=[{}], sha256=[{}]",
+                        text.length(), CoralUtils.sha256(text.getBytes(StandardCharsets.UTF_8)));
+                //logger.trace(Hex.encodeHexString(CoralUtils.toBytesUTF8(text)));
                 flowFileCursor.setContent(CoralUtils.toBytesUTF8(text));
             } else if (parameters.containsKey("create")) {
                 final Map<String, String> attributes = flowFileCursor.getAttributes();
@@ -92,7 +95,7 @@ public class CoralCreateServlet extends HttpServlet {
             for (Part part : parts) {
                 if (part.getName().equals("uploadFile")) {
                     final byte[] bytes = CoralUtils.toBytes(part.getInputStream());
-                    logger.warn("UPLOAD: file=[{}], size=[{}], sha256=[{}]",
+                    logger.trace("UPLOAD: file=[{}], size=[{}], sha256=[{}]",
                             part.getName(), bytes.length, CoralUtils.sha256(bytes));
                     coralState.getFlowFileCursor().setContent(bytes);
                 }
@@ -110,11 +113,21 @@ public class CoralCreateServlet extends HttpServlet {
                 new Attribute("rel", "stylesheet"), new Attribute("type", "text/css"));
         final Element body = CoralUtils.addChild(document.getDocumentElement(), "body");
 
-        addTableMetadata(CoralUtils.addChild(body, "div"), coralState.getFlowFileCursor());
-        addTableAttributes(CoralUtils.addChild(body, "div", new Attribute("class", "content")), coralState.getFlowFileCursor().getAttributes());
+        final Element divHeader = CoralUtils.addChild(body, "div", new Attribute("class", "header"));
+        CoralUtils.addChild(divHeader, "h1", "Coral Processor - Create FlowFile - NiFi");
+        CoralUtils.addChild(divHeader, "p", "Create a FlowFile from user inputs.");
 
-        final Element divFormAddAttribute = CoralUtils.addChild(body, "div", new Attribute("class", "form"));
+        final Element divContent = CoralUtils.addChild(body, "div", new Attribute("class", "content"));
+
+        final Element divMetadata = CoralUtils.addChild(divContent, "div", new Attribute("id", "metadata"));
+        addTableMetadata(CoralUtils.addChild(divMetadata, "div"), coralState.getFlowFileCursor());
+        final Element divAttributes = CoralUtils.addChild(divContent, "div", new Attribute("id", "attributes"));
+        addTableAttributes(divAttributes, coralState.getFlowFileCursor().getAttributes());
+
+        final Element divAttribute = CoralUtils.addChild(divContent, "div", new Attribute("id", "attribute"));
+        final Element divFormAddAttribute = CoralUtils.addChild(divAttribute, "div", new Attribute("class", "form"));
         CoralUtils.addChild(divFormAddAttribute, "h2", "Attribute");
+        CoralUtils.addChild(divFormAddAttribute, "p", "Add / Delete a FlowFile attribute here.");
         final Element formAttribute = CoralUtils.addChild(divFormAddAttribute, "form",
                 new Attribute("action", ""), new Attribute("method", "post"));
         CoralUtils.addChild(formAttribute, "span", "Name");
@@ -125,8 +138,11 @@ public class CoralCreateServlet extends HttpServlet {
         CoralUtils.addChild(formAttribute, "input", new Attribute("name", "deleteAttribute"), new Attribute("type", "submit"), new Attribute("value", "Delete"));
 
         if (fileUI) {
-            CoralUtils.addChild(body, "h2", "Content (Upload File)");
-            final Element divFormUpload = CoralUtils.addChild(body, "div", new Attribute("class", "form"));
+            final Element divFile = CoralUtils.addChild(divContent, "div", new Attribute("id", "file"));
+            CoralUtils.addChild(divFile, "h2", "Content (Upload File)");
+            CoralUtils.addChild(divFile, "p", "Upload FlowFile content from your filesystem here.  (Any "
+                    + "existing content for this FlowFile will be replaced.)");
+            final Element divFormUpload = CoralUtils.addChild(divFile, "div", new Attribute("class", "form"));
             final Element formUpload = CoralUtils.addChild(divFormUpload, "form",
                     new Attribute("action", ""), new Attribute("method", "post"), new Attribute("enctype", "multipart/form-data"));
             CoralUtils.addChild(formUpload, "input", new Attribute("name", "uploadFile"), new Attribute("type", "file"));
@@ -134,8 +150,11 @@ public class CoralCreateServlet extends HttpServlet {
         }
 
         if (textUI) {
-            CoralUtils.addChild(body, "h2", "Content (Edit)");
-            final Element divFormEdit = CoralUtils.addChild(body, "div", new Attribute("class", "form"));
+            final Element divText = CoralUtils.addChild(divContent, "div", new Attribute("id", "text"));
+            CoralUtils.addChild(divText, "h2", "Content (Edit)");
+            CoralUtils.addChild(divText, "p", "Enter text to be used as the FlowFile content here.  (Any "
+                    + "existing content for this FlowFile will be replaced.)");
+            final Element divFormEdit = CoralUtils.addChild(divText, "div", new Attribute("class", "form"));
             final Element formEdit = CoralUtils.addChild(divFormEdit, "form",
                     new Attribute("action", ""), new Attribute("method", "post"));
             final Element divFormEdit1 = CoralUtils.addChild(formEdit, "div");
@@ -146,15 +165,21 @@ public class CoralCreateServlet extends HttpServlet {
             CoralUtils.addChild(divFormEdit2, "input", new Attribute("name", "updateText"), new Attribute("type", "submit"), new Attribute("value", "Update Content"));
         }
 
-        CoralUtils.addChild(body, "h2", "FlowFile");
+        final Element divSubmit = CoralUtils.addChild(divContent, "div", new Attribute("id", "metadata"));
+        CoralUtils.addChild(divSubmit, "h2", "FlowFile");
+        final Element ul = CoralUtils.addChild(divSubmit, "ul");
+        CoralUtils.addChild(ul, "li", "To add the currently specified FlowFile, click the [Create FlowFile] button.");
+        CoralUtils.addChild(ul, "li", "To clear the currently specified FlowFile, click the [Reset FlowFile] button.");
 
-        final Element divFormCreate = CoralUtils.addChild(body, "div", new Attribute("class", "form"));
+        final Element divFormCreate = CoralUtils.addChild(divSubmit, "div", new Attribute("class", "form"));
         final Element form = CoralUtils.addChild(divFormCreate, "form",
                 new Attribute("action", ""), new Attribute("method", "post"));
         CoralUtils.addChild(form, "button", "Create FlowFile", new Attribute("accesskey", "F"),
                 new Attribute("type", "submit"), new Attribute("name", "create"), new Attribute("value", "flowfile"));
         CoralUtils.addChild(form, "button", "Reset FlowFile", new Attribute("accesskey", "R"),
                 new Attribute("type", "submit"), new Attribute("name", "reset"), new Attribute("value", "flowfile"));
+
+        XhtmlUtils.createFooter(body, true);
 
         final byte[] xhtml = CoralUtils.toXml(document);
         response.setStatus(HttpServletResponse.SC_OK);
@@ -165,6 +190,8 @@ public class CoralCreateServlet extends HttpServlet {
 
     private void addTableMetadata(final Element div, final CoralFlowFileCursor flowFileCursor) {
         CoralUtils.addChild(div, "h2", "Metadata");
+        CoralUtils.addChild(div, "p", "This table lists the metadata associated with the FlowFile currently being "
+                + "edited.");
         final Element table = CoralUtils.addChild(div, "table", new Attribute("class", "table"));
         final Element thead = CoralUtils.addChild(table, "thead", new Attribute("class", "table"));
         final Element trHead = CoralUtils.addChild(thead, "tr");
@@ -177,6 +204,8 @@ public class CoralCreateServlet extends HttpServlet {
 
     private void addTableAttributes(final Element div, final Map<String, String> attributes) {
         CoralUtils.addChild(div, "h2", "Attributes");
+        CoralUtils.addChild(div, "p", "This table lists the FlowFile attributes associated with the FlowFile "
+                + "currently being edited.");
         final Element table = CoralUtils.addChild(div, "table", new Attribute("class", "table"));
         final Element thead = CoralUtils.addChild(table, "thead", new Attribute("class", "table"));
         final Element trHead = CoralUtils.addChild(thead, "tr");

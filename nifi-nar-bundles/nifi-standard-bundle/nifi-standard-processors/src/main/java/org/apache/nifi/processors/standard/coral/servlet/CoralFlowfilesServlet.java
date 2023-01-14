@@ -56,13 +56,14 @@ public class CoralFlowfilesServlet extends HttpServlet {
 
     @Override
     protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws IOException {
-        logger.warn("GET {}", request.getRequestURI());
+        logger.trace("GET {}", request.getRequestURI());
         doGetHtml(response);
     }
 
     @Override
     protected void doPost(final HttpServletRequest request, final HttpServletResponse response) {
-        logger.warn("POST {}", request.getRequestURI());
+        logger.trace("POST {}", request.getRequestURI());
+        String location = request.getRequestURI();
         final Map<String, String[]> parameters = new LinkedHashMap<>();
         if ("application/x-www-form-urlencoded".equals(request.getHeader("Content-Type"))) {
             parameters.putAll(request.getParameterMap());
@@ -84,14 +85,14 @@ public class CoralFlowfilesServlet extends HttpServlet {
                     if (matcher.matches()) {
                         final String id = matcher.group(1);
                         final String action = matcher.group(2);
-                        coralState.actionFlowFile(id, action);
+                        location = coralState.actionFlowFile(id, action, location);
                     }
                 //} else {
                 //    log(String.format("doPost()::%s=%s", key, value));
                 }
             }
         }
-        response.setHeader("Location", request.getRequestURI());
+        response.setHeader("Location", location);
         response.setStatus(HttpServletResponse.SC_FOUND);
     }
 
@@ -103,17 +104,35 @@ public class CoralFlowfilesServlet extends HttpServlet {
                 new Attribute("rel", "stylesheet"), new Attribute("type", "text/css"));
         final Element body = CoralUtils.addChild(document.getDocumentElement(), "body");
         final Element divHeader = CoralUtils.addChild(body, "div", new Attribute("class", "header"));
-        CoralUtils.addChild(divHeader, "h1", "Coral Content - NiFi");
+        CoralUtils.addChild(divHeader, "h1", "Coral Processor - FlowFile State - NiFi");
+        CoralUtils.addChild(divHeader, "p", "This table lists the FlowFiles currently held by the processor.  Outgoing "
+                + "relationships are defined in the processor properties.");
+        final Element ulActions = CoralUtils.addChild(divHeader, "ul");
+        CoralUtils.addChild(ulActions, "li", "View the FlowFile metadata by clicking the link in the 'Metadata' column for the record.");
+        CoralUtils.addChild(ulActions, "li", "View the FlowFile content by clicking the link in the 'Content' column for the record.");
+        CoralUtils.addChild(ulActions, "li", "Copy the FlowFile by clicking the 'CLONE' action button for the record.");
+        CoralUtils.addChild(ulActions, "li", "Delete the FlowFile by clicking the 'DROP' action button for the record.");
+        CoralUtils.addChild(ulActions, "li", "Update the FlowFile editor with the FlowFile data by clicking the 'EDIT' action button for the record.");
+        CoralUtils.addChild(ulActions, "li", "Route the FlowFile to an outgoing relationship by clicking the button for the relationship.");
 
         final Element divContent = CoralUtils.addChild(body, "div", new Attribute("class", "content"));
-        final List<String> actions = Arrays.asList("CLONE", "DROP");
+        final Element divTable = CoralUtils.addChild(divContent, "div", new Attribute("id", "table"));
+
+        final List<String> actions = Arrays.asList("CLONE", "DROP", "EDIT");
         final Set<String> relationships = coralState.getRelationships().stream()
                 .map(Relationship::getName).collect(Collectors.toSet());
-        addTable(divContent, actions, relationships);
+        addTable(divTable, actions, relationships);
 
-        final String text = String.format("%s - count=%d - in=%d", new Date(),
-                coralState.flowFileCount(), coralState.incrementToConsume(0));
-        CoralUtils.addChild(body, "div", text, new Attribute("class", "footer"));
+        final Element divViewState = CoralUtils.addChild(divContent, "div", new Attribute("id", "state"));
+        CoralUtils.addChild(divViewState, "h2", "Incoming FlowFile State");
+        CoralUtils.addChild(divViewState, "p", "Requested FlowFiles will be added to the processor FlowFile state as "
+                + "they are supplied to an incoming relationship.");
+        final Element tableState = CoralUtils.addChild(divViewState, "table", new Attribute("class", "table"));
+        final Element tr2State = CoralUtils.addChild(tableState, "tr");
+        CoralUtils.addChild(tr2State, "td", "Number of upstream FlowFiles requested by this processor");
+        CoralUtils.addChild(tr2State, "td", Integer.toString(coralState.incrementToConsume(0)));
+
+        XhtmlUtils.createFooter(body, true);
 
         final byte[] xhtml = CoralUtils.toXml(document);
         response.setStatus(HttpServletResponse.SC_OK);

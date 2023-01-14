@@ -24,13 +24,16 @@
 
 <h1>Coral Processor</h1>
 <p>When running, this processor provides a simple web interface at the port specified in the processor properties (by
-    default, port 18080). The home page of the UI provides access to the following functionality:</p>
+    default, port 18443). The <a href="https://localhost:18443">home page of the UI</a> provides access to the following
+    functionality:</p>
 <ul>
     <li>View Processor State</li>
     <li>Custom Routing of Outgoing FlowFile</li>
     <li>Accept Incoming FlowFile</li>
     <li>Create New FlowFile</li>
 </ul>
+<p>When not running, this processor is inert. It will not accept FlowFiles, nor will any FlowFiles be routed to any
+    downstream connections. It is only intended for manual use during flow development.</p>
 <p>The intent of this processor is to provide a simple means to debug flow behavior at runtime, allowing for manual add,
     view, modify, and delete of individual FlowFiles in a running flow. It is not intended to run in a fully automated
     flow, but it can be useful during flow development to modify attributes or content, to route FlowFiles in a custom

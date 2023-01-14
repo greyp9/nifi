@@ -31,7 +31,6 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.Part;
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -50,7 +49,7 @@ public class CoralServlet extends HttpServlet {
 
     @Override
     protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws IOException {
-        logger.warn("GET {}", request.getRequestURI());
+        logger.trace("GET {}", request.getRequestURI());
 
         if (request.getRequestURI().equals("/favicon.ico")) {
             doGetFavicon(response);
@@ -66,7 +65,7 @@ public class CoralServlet extends HttpServlet {
 
     @Override
     protected void doPost(final HttpServletRequest request, final HttpServletResponse response) throws ServletException, IOException {
-        logger.warn("POST {}", request.getRequestURI());
+        logger.trace("POST {}", request.getRequestURI());
         final Map<String, String[]> parameters = new LinkedHashMap<>();
         final String contentType = request.getHeader("Content-Type");
         if (contentType == null) {
@@ -78,7 +77,7 @@ public class CoralServlet extends HttpServlet {
             for (Part part : parts) {
                 if (part.getName().equals("uploadFile")) {
                     final byte[] bytes = CoralUtils.toBytes(part.getInputStream());
-                    logger.warn("UPLOAD: file=[{}], size=[{}], sha256=[{}]",
+                    logger.trace("UPLOAD: file=[{}], size=[{}], sha256=[{}]",
                             part.getName(), bytes.length, CoralUtils.sha256(bytes));
                 }
             }
@@ -125,36 +124,55 @@ public class CoralServlet extends HttpServlet {
         CoralUtils.addChild(head, "link", new Attribute("href", "/coral.css"),
                 new Attribute("rel", "stylesheet"), new Attribute("type", "text/css"));
         final Element body = CoralUtils.addChild(document.getDocumentElement(), "body");
+
+        // body header
         final Element divHeader = CoralUtils.addChild(body, "div", new Attribute("class", "header"));
-        CoralUtils.addChild(divHeader, "h1", "Coral - NiFi");
+        CoralUtils.addChild(divHeader, "h1", "Coral Processor - Flow Debugger - NiFi");
+        CoralUtils.addChild(divHeader, "p", "NiFi was built to automate the flow of data between systems.  The Coral "
+                + "processor exists to help debug flow mechanics during flow development.");
 
         final Element divContent = CoralUtils.addChild(body, "div", new Attribute("class", "content"));
 
-        final Element divViewState = CoralUtils.addChild(divContent, "div");
-        CoralUtils.addChild(divViewState, "h2", "View State");
-        CoralUtils.addChild(divViewState, "a", "View Processor State", new Attribute("href", "/flowfiles"));
+        // incoming flowfiles
+        final Element divIncoming = CoralUtils.addChild(divContent, "div", new Attribute("id", "incoming"));
+        CoralUtils.addChild(divIncoming, "h2", "Incoming FlowFiles");
+        CoralUtils.addChild(divIncoming, "p", "Update the Processor FlowFile state via these UI elements:");
 
-        final Element divAccept = CoralUtils.addChild(divContent, "div");
-        CoralUtils.addChild(divAccept, "h2", "Accept Incoming");
-        final Element divFormAccept = CoralUtils.addChild(divAccept, "div", new Attribute("class", "form"));
-        final Element form = CoralUtils.addChild(divFormAccept, "form",
+        final Element tableIn = CoralUtils.addChild(divIncoming, "table", new Attribute("class", "table"));
+        final Element tr1In = CoralUtils.addChild(tableIn, "tr");
+        CoralUtils.addChild(tr1In, "td", "FlowFiles may be manually routed from upstream processors.");
+        final Element tdInForm = CoralUtils.addChild(tr1In, "td");
+        final Element tr2In = CoralUtils.addChild(tableIn, "tr");
+        CoralUtils.addChild(tr2In, "td", "FlowFiles may be manually created from user-supplied text.");
+        final Element tdInText = CoralUtils.addChild(tr2In, "td");
+        final Element tr3In = CoralUtils.addChild(tableIn, "tr");
+        CoralUtils.addChild(tr3In, "td", "FlowFiles may be manually created from user-supplied files via file upload.");
+        final Element tdInFile = CoralUtils.addChild(tr3In, "td");
+
+        final Element form = CoralUtils.addChild(tdInForm, "form",
                 new Attribute("action", ""), new Attribute("method", "post"));
         CoralUtils.addChild(form, "button", "Accept Incoming FlowFile", new Attribute("accesskey", "A"),
                 new Attribute("type", "submit"), new Attribute("name", "accept"), new Attribute("value", "flowfile"));
+        CoralUtils.addChild(tdInText, "a", "[Create From Text]", new Attribute("href", "/flowfile/create/text"));
+        CoralUtils.addChild(tdInFile, "a", "[Create From File Upload]", new Attribute("href", "/flowfile/create/text"));
 
-        final Element divCreate = CoralUtils.addChild(divContent, "div");
-        CoralUtils.addChild(divCreate, "h2", "Create New FlowFile");
-        final Element ul = CoralUtils.addChild(divCreate, "ul");
+        // flowfile state
+        final Element divViewState = CoralUtils.addChild(divContent, "div", new Attribute("id", "state"));
+        CoralUtils.addChild(divViewState, "h2", "FlowFile State");
+        CoralUtils.addChild(divViewState, "p", "Current processor FlowFile state:");
 
-        final Element li1 = CoralUtils.addChild(ul, "li");
-        CoralUtils.addChild(li1, "a", "from text", new Attribute("href", "/flowfile/create/text"));
-        final Element li2 = CoralUtils.addChild(ul, "li");
-        CoralUtils.addChild(li2, "a", "from file upload", new Attribute("href", "/flowfile/create/file"));
+        final Element tableState = CoralUtils.addChild(divViewState, "table", new Attribute("class", "table"));
+        final Element tr1State = CoralUtils.addChild(tableState, "tr");
+        CoralUtils.addChild(tr1State, "td", "Number of FlowFiles held by this processor");
+        CoralUtils.addChild(tr1State, "td", Integer.toString(coralState.flowFileCount()));
+        final Element tr2State = CoralUtils.addChild(tableState, "tr");
+        CoralUtils.addChild(tr2State, "td", "Number of upstream FlowFiles requested by this processor");
+        CoralUtils.addChild(tr2State, "td", Integer.toString(coralState.incrementToConsume(0)));
 
-        final Element divFooter = CoralUtils.addChild(body, "div", new Attribute("class", "footer"));
-        final String textFooter = String.format("%s - count=%d - in=%d", new Date(),
-                coralState.flowFileCount(), coralState.incrementToConsume(0));
-        CoralUtils.addChild(divFooter, "span", textFooter);
+        final Element pDetail = CoralUtils.addChild(divViewState, "p");
+        CoralUtils.addChild(pDetail, "a", "View Detail", new Attribute("href", "/flowfiles"));
+
+        XhtmlUtils.createFooter(body, false);
 
         final byte[] xhtml = CoralUtils.toXml(document);
         response.setStatus(HttpServletResponse.SC_OK);

@@ -34,18 +34,13 @@ import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.processors.standard.coral.core.CoralFlowFile;
 import org.apache.nifi.processors.standard.coral.core.CoralFlowFileRoute;
 import org.apache.nifi.processors.standard.coral.core.CoralState;
-import org.apache.nifi.processors.standard.coral.servlet.CoralContentServlet;
-import org.apache.nifi.processors.standard.coral.servlet.CoralCreateServlet;
-import org.apache.nifi.processors.standard.coral.servlet.CoralFlowfilesServlet;
-import org.apache.nifi.processors.standard.coral.servlet.CoralMetadataServlet;
-import org.apache.nifi.processors.standard.coral.servlet.CoralServlet;
+import org.apache.nifi.processors.standard.coral.core.ServerFactory;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlet.ServletContextHandler;
 
-import javax.servlet.MultipartConfigElement;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -59,10 +54,10 @@ public class Coral extends AbstractProcessor {
 
     public static final PropertyDescriptor PORT = new PropertyDescriptor.Builder()
             .name("Port")
-            .description("The port to listen on for incoming connections")
+            .description("The (SSL) port to listen on for incoming connections")
             .required(true)
             .addValidator(StandardValidators.PORT_VALIDATOR)
-            .defaultValue("18080")
+            .defaultValue("18443")
             .build();
     public static final PropertyDescriptor RELATIONSHIPS = new PropertyDescriptor.Builder()
             .name("Relationships")
@@ -100,24 +95,8 @@ public class Coral extends AbstractProcessor {
     @OnScheduled
     public void onScheduled(final ProcessContext context) {
         coralState = new CoralState(getRelationships());
-
-        // https://www.eclipse.org/jetty/documentation/jetty-9/index.html#jetty-helloworld
-        // https://stackoverflow.com/questions/39421686/jetty-pass-object-from-main-method-to-servlet
-        server = new Server(context.getProperty(PORT).asInteger());
-        relationships.set(toRelationships(context.getProperty(RELATIONSHIPS).getValue()));
-        //org.eclipse.jetty.util.ssl.SslContextFactory
-        //final SslContextFactory sslContextFactory = new SslContextFactory.Server();
-        //sslContextFactory.setKeyStorePath("conf/keystore.p12");
-        final ServletContextHandler contextHandler = new ServletContextHandler();
-        contextHandler.setContextPath("/");
-        contextHandler.setAttribute(coralState.getClass().getName(), coralState);
-        contextHandler.addServlet(CoralServlet.class, "/*");
-        contextHandler.addServlet(CoralFlowfilesServlet.class, "/flowfiles/*");
-        contextHandler.addServlet(CoralMetadataServlet.class, "/flowfile/metadata/*");
-        contextHandler.addServlet(CoralContentServlet.class, "/flowfile/content/*");
-        contextHandler.addServlet(CoralCreateServlet.class, "/flowfile/create/*").getRegistration()
-                .setMultipartConfig(new MultipartConfigElement(null, 1_048_576L, 1_048_576L, 1_048_576));
-        server.setHandler(contextHandler);
+        final int port = context.getProperty(PORT).asInteger();
+        server = new ServerFactory().create(coralState, port);
 
         try {
             server.start();
@@ -172,7 +151,7 @@ public class Coral extends AbstractProcessor {
     private CoralFlowFile toCoral(final ProcessSession session, final FlowFile flowFile) {
         try {
             final long entryDate = flowFile.getEntryDate();
-            final Map<String, String> attributes = flowFile.getAttributes();
+            final Map<String, String> attributes = new HashMap<>(flowFile.getAttributes());
             attributes.put("ffId", Long.toString(flowFile.getId()));
             try (final InputStream read = session.read(flowFile)) {
                 final byte[] data = IOUtils.toByteArray(read);

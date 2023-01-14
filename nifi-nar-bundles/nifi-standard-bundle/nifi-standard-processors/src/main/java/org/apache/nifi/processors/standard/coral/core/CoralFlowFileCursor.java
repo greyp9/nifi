@@ -1,7 +1,6 @@
 package org.apache.nifi.processors.standard.coral.core;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,7 +21,7 @@ public final class CoralFlowFileCursor {
         return content;
     }
 
-    public void reset() throws IOException {
+    public void reset() {
         attributes.clear();
         content.reset();
     }
@@ -35,8 +34,14 @@ public final class CoralFlowFileCursor {
         attributes.remove(name);
     }
 
-    public void setContent(final byte[] data) throws IOException {
+    public void setContent(final byte[] data) {
         content.reset();
-        content.write(data);
+        content.write(data, 0, data.length);
+    }
+
+    public void set(final CoralFlowFile flowFile) {
+        reset();
+        attributes.putAll(flowFile.getAttributes());
+        setContent(flowFile.getData());
     }
 }

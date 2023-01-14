@@ -51,7 +51,7 @@ public class CoralMetadataServlet extends HttpServlet {
 
     @Override
     protected void doGet(final HttpServletRequest request, final HttpServletResponse response) throws IOException {
-        logger.warn("GET {}", request.getRequestURI());
+        logger.trace("GET {}", request.getRequestURI());
         final Matcher matcher = PATTERN.matcher(request.getRequestURI());
         if (matcher.matches()) {
             final Optional<CoralFlowFile> flowFile = coralState.getFlowFile(matcher.group(1));
@@ -71,15 +71,25 @@ public class CoralMetadataServlet extends HttpServlet {
     private byte[] doGetHtml(final CoralFlowFile flowFile) throws IOException {
         final Document document = CoralUtils.create("html");
         final Element head = CoralUtils.addChild(document.getDocumentElement(), "head");
-        CoralUtils.addChild(head, "title", "Coral - FlowFile - NiFi");
+        CoralUtils.addChild(head, "title", "Coral - NiFi");
         CoralUtils.addChild(head, "link", new Attribute("href", "/coral.css"),
                 new Attribute("rel", "stylesheet"), new Attribute("type", "text/css"));
         final Element body = CoralUtils.addChild(document.getDocumentElement(), "body");
         final Element divHeader = CoralUtils.addChild(body, "div", new Attribute("class", "header"));
-        CoralUtils.addChild(divHeader, "h1", "FlowFile - NiFi");
+        CoralUtils.addChild(divHeader, "h1", "Coral Processor - FlowFile Metadata - NiFi");
+        CoralUtils.addChild(divHeader, "p", "Non-content details associated with this FlowFile.");
 
-        addTableMetadata(CoralUtils.addChild(body, "div", new Attribute("class", "content")), flowFile);
-        addTableAttributes(CoralUtils.addChild(body, "div", new Attribute("class", "content")), flowFile);
+        final Element divContent = CoralUtils.addChild(body, "div", new Attribute("class", "content"));
+        final Element divMetadata = CoralUtils.addChild(divContent, "div", new Attribute("id", "metadata"));
+        CoralUtils.addChild(divMetadata, "h2", "FlowFile Metadata");
+        CoralUtils.addChild(divMetadata, "p", "Metadata associated with the FlowFile.");
+        addTableMetadata(divMetadata, flowFile);
+        final Element divAttributes = CoralUtils.addChild(divContent, "div", new Attribute("id", "attributes"));
+        CoralUtils.addChild(divAttributes, "h2", "FlowFile Attributes");
+        CoralUtils.addChild(divAttributes, "p", "Attributes associated with the FlowFile.");
+        addTableAttributes(divAttributes, flowFile);
+
+        XhtmlUtils.createFooter(body, true);
 
         return CoralUtils.toXml(document);
     }

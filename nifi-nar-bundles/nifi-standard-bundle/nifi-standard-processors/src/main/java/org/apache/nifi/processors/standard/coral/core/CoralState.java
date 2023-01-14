@@ -99,12 +99,15 @@ public final class CoralState {
         );
     }
 
-    public void actionFlowFile(final String idString, final String action) {
+    public String actionFlowFile(final String idString, final String action, String location) {
         if ("CLONE".equals(action)) {
             cloneFlowFile(idString);
         } else if ("DROP".equals(action)) {
             dropFlowFile(idString);
+        } else if ("EDIT".equals(action)) {
+            location = editFlowFile(idString);
         }
+        return location;
     }
 
     private void cloneFlowFile(final String idString) {
@@ -117,6 +120,13 @@ public final class CoralState {
         final long id = Long.parseLong(idString);
         final Optional<CoralFlowFile> flowFile = flowFiles.stream().filter(ff -> ff.getId() == id).findFirst();
         flowFile.ifPresent(flowFiles::remove);
+    }
+
+    private String editFlowFile(final String idString) {
+        final long id = Long.parseLong(idString);
+        final Optional<CoralFlowFile> flowFile = flowFiles.stream().filter(ff -> ff.getId() == id).findFirst();
+        flowFile.ifPresent(flowFileCursor::set);
+        return "/flowfile/create/text";
     }
 
     public List<CoralFlowFileRoute> drainTo() {
