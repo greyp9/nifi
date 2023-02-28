@@ -23,10 +23,12 @@ env:
     -XX:ReservedCodeCacheSize=1g
     -XX:+UseG1GC
     -Dorg.slf4j.simpleLogger.defaultLogLevel=WARN
-    -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+    -Dmaven.wagon.httpconnectionManager.maxPerRoute=10
+    -Dmaven.wagon.httpconnectionManager.maxTotal=20
   COMPILE_MAVEN_OPTS: >-
     -Xmx3g
-    -Dmaven.wagon.httpconnectionManager.ttlSeconds=120
+    -Dmaven.wagon.httpconnectionManager.maxPerRoute=10
+    -Dmaven.wagon.httpconnectionManager.maxTotal=20
   MAVEN_COMPILE_COMMAND: >-
     mvn test-compile
     --show-version
