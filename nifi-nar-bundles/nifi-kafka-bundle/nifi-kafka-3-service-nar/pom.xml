@@ -22,13 +22,13 @@
         <version>2.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>nifi-kafka-service-nar</artifactId>
+    <artifactId>nifi-kafka-3-service-nar</artifactId>
     <packaging>nar</packaging>
 
     <dependencies>
         <dependency>
             <groupId>org.apache.nifi</groupId>
-            <artifactId>nifi-kafka-service</artifactId>
+            <artifactId>nifi-kafka-3-service</artifactId>
             <version>2.0.0-SNAPSHOT</version>
         </dependency>
         <dependency>
