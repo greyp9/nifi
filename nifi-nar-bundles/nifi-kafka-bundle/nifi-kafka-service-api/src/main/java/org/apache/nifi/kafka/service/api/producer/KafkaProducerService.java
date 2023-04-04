@@ -16,12 +16,16 @@
  */
 package org.apache.nifi.kafka.service.api.producer;
 
+import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.record.RecordSummary;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 
 import java.util.Iterator;
+import java.util.List;
 
 public interface KafkaProducerService {
 
     RecordSummary send(Iterator<KafkaRecord> records, PublishContext publishContext);
+
+    List<PartitionState> getPartitionStates(String topic);
 }

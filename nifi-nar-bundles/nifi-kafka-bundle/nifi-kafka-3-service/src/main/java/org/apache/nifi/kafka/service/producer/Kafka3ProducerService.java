@@ -16,17 +16,42 @@
  */
 package org.apache.nifi.kafka.service.producer;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.kafka.service.api.record.RecordSummary;
 
 import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+import java.util.stream.Collectors;
 
 public class Kafka3ProducerService implements KafkaProducerService {
+    private final Producer<byte[], byte[]> producer;
+
+    public Kafka3ProducerService(final String bootstrapServers) {
+        final Properties properties = new Properties();
+        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        final ByteArraySerializer serializer = new ByteArraySerializer();
+        this.producer = new KafkaProducer<>(properties, serializer, serializer);
+    }
 
     @Override
-    public RecordSummary send(Iterator<KafkaRecord> records, PublishContext publishContext) {
+    public RecordSummary send(final Iterator<KafkaRecord> records, final PublishContext publishContext) {
         return null;
+    }
+
+    @Override
+    public List<PartitionState> getPartitionStates(final String topic) {
+        final List<PartitionInfo> partitionInfos = producer.partitionsFor(topic);
+        return partitionInfos.stream()
+                .map(p -> new PartitionState(p.topic(), p.partition()))
+                .collect(Collectors.toList());
     }
 }

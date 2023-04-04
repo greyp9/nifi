@@ -16,12 +16,30 @@
  */
 package org.apache.nifi.kafka.service.consumer;
 
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
 import org.apache.nifi.kafka.service.api.consumer.PollingContext;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
 import org.apache.nifi.kafka.service.api.record.RecordSummary;
 
+import java.util.List;
+import java.util.Properties;
+import java.util.stream.Collectors;
+
 public class Kafka3ConsumerService implements KafkaConsumerService {
+    private final Consumer<byte[], byte[]> consumer;
+
+    public Kafka3ConsumerService(final String bootstrapServers) {
+        final Properties properties = new Properties();
+        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        final ByteArrayDeserializer deserializer = new ByteArrayDeserializer();
+        this.consumer = new KafkaConsumer<>(properties, deserializer, deserializer);
+    }
 
     @Override
     public void commit(RecordSummary recordSummary) {
@@ -30,5 +48,13 @@ public class Kafka3ConsumerService implements KafkaConsumerService {
     @Override
     public Iterable<ByteRecord> poll(PollingContext pollingContext) {
         return null;
+    }
+
+    @Override
+    public List<PartitionState> getPartitionStates(final String topic) {
+        final List<PartitionInfo> partitionInfos = consumer.partitionsFor(topic);
+        return partitionInfos.stream()
+                .map(p -> new PartitionState(p.topic(), p.partition()))
+                .collect(Collectors.toList());
     }
 }

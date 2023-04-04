@@ -14,19 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.kafka.service.api.consumer;
+package org.apache.nifi.kafka.service.api.common;
 
-import org.apache.nifi.kafka.service.api.common.PartitionState;
-import org.apache.nifi.kafka.service.api.record.ByteRecord;
-import org.apache.nifi.kafka.service.api.record.RecordSummary;
+public class PartitionState {
+    private final String topic;
+    private final int partition;
 
-import java.util.List;
+    public PartitionState(final String topic, final int partition) {
+        this.topic = topic;
+        this.partition = partition;
+    }
 
-public interface KafkaConsumerService {
+    public String getTopic() {
+        return topic;
+    }
 
-    void commit(RecordSummary recordSummary);
-
-    Iterable<ByteRecord> poll(PollingContext pollingContext);
-
-    List<PartitionState> getPartitionStates(String topic);
+    public int getPartition() {
+        return partition;
+    }
 }
