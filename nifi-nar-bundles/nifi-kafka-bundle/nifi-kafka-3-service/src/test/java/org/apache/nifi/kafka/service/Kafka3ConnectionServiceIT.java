@@ -16,45 +16,66 @@
  */
 package org.apache.nifi.kafka.service;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.nifi.kafka.service.api.KafkaConnectionService;
+import org.apache.nifi.components.ConfigVerificationResult;
+import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
+import org.apache.nifi.reporting.InitializationException;
+import org.apache.nifi.util.MockConfigurationContext;
+import org.apache.nifi.util.NoOpProcessor;
+import org.apache.nifi.util.TestRunner;
+import org.apache.nifi.util.TestRunners;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class Kafka3ConnectionServiceIT {
     private static final String IMAGE_NAME = "confluentinc/cp-kafka:7.3.2";
 
     private static final String TEST_TOPIC = "nifi-" + System.currentTimeMillis();
 
-    private static KafkaContainer kafka;
+    private static final String SERVICE_ID = Kafka3ConnectionService.class.getSimpleName();
+
+    private static final String UNREACHABLE_BOOTSTRAP_SERVERS = "127.0.0.1:1000";
+
+    private static final String UNREACHABLE_TIMEOUT = "1 s";
+
+    private static KafkaContainer kafkaContainer;
+
+    TestRunner runner;
+
+    Kafka3ConnectionService service;
 
     @BeforeAll
-    static void beforeAll() throws ExecutionException, InterruptedException, TimeoutException {
-        kafka = new KafkaContainer(DockerImageName.parse(IMAGE_NAME));
-        kafka.start();
+    static void startContainer() throws ExecutionException, InterruptedException, TimeoutException {
+        kafkaContainer = new KafkaContainer(DockerImageName.parse(IMAGE_NAME));
+        kafkaContainer.start();
 
         final Properties properties = new Properties();
-        properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
-        try (final AdminClient adminClient = AdminClient.create(properties)) {
+        properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
+        try (final Admin adminClient = Admin.create(properties)) {
             final int numPartitions = 1;
             final short replicationFactor = 1;
             final NewTopic newTopic = new NewTopic(TEST_TOPIC, numPartitions, replicationFactor);
@@ -65,27 +86,70 @@ public class Kafka3ConnectionServiceIT {
     }
 
     @AfterAll
-    static void afterAll() {
-        kafka.stop();
+    static void stopContainer() {
+        kafkaContainer.stop();
+    }
+
+    @BeforeEach
+    void setRunner() throws InitializationException {
+        runner = TestRunners.newTestRunner(NoOpProcessor.class);
+        service = new Kafka3ConnectionService();
+        runner.addControllerService(SERVICE_ID, service);
     }
 
     @Test
-    void testProducerFromConnectionService() {
-        final KafkaConnectionService connectionService = new Kafka3ConnectionService(kafka.getBootstrapServers());
-        final KafkaProducerService producerService = connectionService.getProducerService(null);
+    void testVerifySuccessful() {
+        final Map<PropertyDescriptor, String> properties = new LinkedHashMap<>();
+        properties.put(Kafka3ConnectionService.BOOTSTRAP_SERVERS, kafkaContainer.getBootstrapServers());
+        final MockConfigurationContext configurationContext = new MockConfigurationContext(properties, null);
+
+        final List<ConfigVerificationResult> results = service.verify(configurationContext, runner.getLogger(), Collections.emptyMap());
+
+        assertFalse(results.isEmpty());
+
+        final ConfigVerificationResult firstResult = results.iterator().next();
+        assertEquals(ConfigVerificationResult.Outcome.SUCCESSFUL, firstResult.getOutcome());
+        assertNotNull(firstResult.getExplanation());
+    }
+
+    @Test
+    void testVerifyFailed() {
+        final Map<PropertyDescriptor, String> properties = new LinkedHashMap<>();
+        properties.put(Kafka3ConnectionService.BOOTSTRAP_SERVERS, UNREACHABLE_BOOTSTRAP_SERVERS);
+        properties.put(Kafka3ConnectionService.CLIENT_TIMEOUT, UNREACHABLE_TIMEOUT);
+
+        final MockConfigurationContext configurationContext = new MockConfigurationContext(properties, null);
+
+        final List<ConfigVerificationResult> results = service.verify(configurationContext, runner.getLogger(), Collections.emptyMap());
+
+        assertFalse(results.isEmpty());
+
+        final ConfigVerificationResult firstResult = results.iterator().next();
+        assertEquals(ConfigVerificationResult.Outcome.FAILED, firstResult.getOutcome());
+    }
+
+    @Test
+    void testGetProducerService() {
+        runner.setProperty(service, Kafka3ConnectionService.BOOTSTRAP_SERVERS, kafkaContainer.getBootstrapServers());
+        runner.enableControllerService(service);
+
+        final KafkaProducerService producerService = service.getProducerService(null);
         final List<PartitionState> partitionStates = producerService.getPartitionStates(TEST_TOPIC);
-        assertEquals(1, partitionStates.size());
-        final PartitionState partitionState = partitionStates.iterator().next();
-        assertEquals(TEST_TOPIC, partitionState.getTopic());
-        assertEquals(0, partitionState.getPartition());
+        assertPartitionStatesFound(partitionStates);
     }
 
 
     @Test
-    void testConsumerFromConnectionService() {
-        final KafkaConnectionService connectionService = new Kafka3ConnectionService(kafka.getBootstrapServers());
-        final KafkaConsumerService consumerService = connectionService.getConsumerService(null);
+    void testGetConsumerService() {
+        runner.setProperty(service, Kafka3ConnectionService.BOOTSTRAP_SERVERS, kafkaContainer.getBootstrapServers());
+        runner.enableControllerService(service);
+
+        final KafkaConsumerService consumerService = service.getConsumerService(null);
         final List<PartitionState> partitionStates = consumerService.getPartitionStates(TEST_TOPIC);
+        assertPartitionStatesFound(partitionStates);
+    }
+
+    private void assertPartitionStatesFound(final List<PartitionState> partitionStates) {
         assertEquals(1, partitionStates.size());
         final PartitionState partitionState = partitionStates.iterator().next();
         assertEquals(TEST_TOPIC, partitionState.getTopic());

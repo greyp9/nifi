@@ -17,7 +17,6 @@
 package org.apache.nifi.kafka.service.consumer;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -34,9 +33,7 @@ import java.util.stream.Collectors;
 public class Kafka3ConsumerService implements KafkaConsumerService {
     private final Consumer<byte[], byte[]> consumer;
 
-    public Kafka3ConsumerService(final String bootstrapServers) {
-        final Properties properties = new Properties();
-        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    public Kafka3ConsumerService(final Properties properties) {
         final ByteArrayDeserializer deserializer = new ByteArrayDeserializer();
         this.consumer = new KafkaConsumer<>(properties, deserializer, deserializer);
     }

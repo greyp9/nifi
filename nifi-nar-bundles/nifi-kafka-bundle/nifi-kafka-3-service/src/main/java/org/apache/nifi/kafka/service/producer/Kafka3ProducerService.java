@@ -18,7 +18,6 @@ package org.apache.nifi.kafka.service.producer;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
@@ -35,9 +34,7 @@ import java.util.stream.Collectors;
 public class Kafka3ProducerService implements KafkaProducerService {
     private final Producer<byte[], byte[]> producer;
 
-    public Kafka3ProducerService(final String bootstrapServers) {
-        final Properties properties = new Properties();
-        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    public Kafka3ProducerService(final Properties properties) {
         final ByteArraySerializer serializer = new ByteArraySerializer();
         this.producer = new KafkaProducer<>(properties, serializer, serializer);
     }
