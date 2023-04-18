@@ -18,6 +18,7 @@ package org.apache.nifi.kafka.service.producer;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
@@ -40,8 +41,16 @@ public class Kafka3ProducerService implements KafkaProducerService {
     }
 
     @Override
-    public RecordSummary send(final Iterator<KafkaRecord> records, final PublishContext publishContext) {
-        return null;
+    public RecordSummary send(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext) {
+        while (kafkaRecords.hasNext()) {
+            final KafkaRecord kafkaRecord = kafkaRecords.next();
+            producer.send(toProducerRecord(publishContext.getTopicName(), kafkaRecord));
+        }
+        return new RecordSummary();
+    }
+
+    private ProducerRecord<byte[], byte[]> toProducerRecord(final String topicName, final KafkaRecord kafkaRecord) {
+        return new ProducerRecord<>(topicName, kafkaRecord.getKey(), kafkaRecord.getValue());
     }
 
     @Override

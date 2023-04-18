@@ -14,22 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.kafka.service.api.record;
+package org.apache.nifi.kafka.processors.producer;
 
-public class KafkaRecord {
-    private final byte[] key;
-    private final byte[] value;
+import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 
-    public KafkaRecord(final byte[] key, final byte[] value) {
-        this.key = key;
-        this.value = value;
-    }
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Iterator;
 
-    public byte[] getKey() {
-        return key;
-    }
+public interface FlowFileConversionStrategy {
 
-    public byte[] getValue() {
-        return value;
-    }
+    Iterator<KafkaRecord> convert(FlowFile flowFile, InputStream in) throws IOException;
 }

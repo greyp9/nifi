@@ -26,6 +26,10 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
+import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
+import org.apache.nifi.kafka.service.api.producer.PublishContext;
+import org.apache.nifi.kafka.service.api.record.KafkaRecord;
+import org.apache.nifi.kafka.service.api.record.RecordSummary;
 import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.util.MockConfigurationContext;
 import org.apache.nifi.util.NoOpProcessor;
@@ -38,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -61,6 +66,8 @@ public class Kafka3ConnectionServiceIT {
     private static final String UNREACHABLE_BOOTSTRAP_SERVERS = "127.0.0.1:1000";
 
     private static final String UNREACHABLE_TIMEOUT = "1 s";
+
+    private static final String TEST_RECORD_VALUE = "value-" + System.currentTimeMillis();
 
     private static KafkaContainer kafkaContainer;
 
@@ -95,6 +102,17 @@ public class Kafka3ConnectionServiceIT {
         runner = TestRunners.newTestRunner(NoOpProcessor.class);
         service = new Kafka3ConnectionService();
         runner.addControllerService(SERVICE_ID, service);
+        runner.setProperty(service, Kafka3ConnectionService.BOOTSTRAP_SERVERS, kafkaContainer.getBootstrapServers());
+    }
+
+    @Test
+    void testProduceOne() {
+        runner.enableControllerService(service);
+        final KafkaProducerService producerService = service.getProducerService(new ProducerConfiguration());
+        final KafkaRecord kafkaRecord = new KafkaRecord(null, TEST_RECORD_VALUE.getBytes(StandardCharsets.UTF_8));
+        final List<KafkaRecord> kafkaRecords = Collections.singletonList(kafkaRecord);
+        final RecordSummary summary = producerService.send(kafkaRecords.iterator(), new PublishContext(TEST_TOPIC));
+        assertNotNull(summary);
     }
 
     @Test

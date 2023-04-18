@@ -14,16 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.kafka.service.api.producer;
+package org.apache.nifi.kafka.processors.producer;
 
-public class PublishContext {
-    private final String topicName;
+import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.kafka.service.api.record.KafkaRecord;
+import org.apache.nifi.stream.io.StreamUtils;
 
-    public PublishContext(final String topicName) {
-        this.topicName = topicName;
-    }
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collections;
+import java.util.Iterator;
 
-    public String getTopicName() {
-        return topicName;
+public class OneToOneConversionStrategy implements FlowFileConversionStrategy {
+
+    @Override
+    public Iterator<KafkaRecord> convert(final FlowFile flowFile, final InputStream in) throws IOException {
+        final ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        StreamUtils.copy(in, bos);
+        final KafkaRecord kafkaRecord = new KafkaRecord(null, bos.toByteArray());
+        return Collections.singletonList(kafkaRecord).iterator();
     }
 }
