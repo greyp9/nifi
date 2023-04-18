@@ -14,8 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.processors.kafka.pubsub;
+package org.apache.nifi.kafka.processors;
 
+import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
@@ -32,30 +33,43 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.nifi.expression.ExpressionLanguageScope.NONE;
 
+@Tags({"kafka", "producer", "record"})
 public class PublishKafka extends AbstractProcessor implements VerifiableProcessor {
 
-    public static final PropertyDescriptor TOPIC = new PropertyDescriptor.Builder()
-            .name("topic")
+    static final PropertyDescriptor CONNECTION_SERVICE = new PropertyDescriptor.Builder()
+            .name("Kafka Connection Service")
+            .displayName("Kafka Connection Service")
+            .description("Provides connections to Kafka Broker for publishing Kafka Records")
+            .identifiesControllerService(KafkaConnectionService.class)
+            .expressionLanguageSupported(NONE)
+            .required(true)
+            .build();
+
+    static final PropertyDescriptor TOPIC_NAME = new PropertyDescriptor.Builder()
+            .name("Topic Name")
             .displayName("Topic Name")
-            .description("The name of the Kafka Topic to publish to.")
+            .description("Name of the Kafka Topic to which the Processor publishes Kafka Records")
             .required(true)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .build();
 
-    public static final PropertyDescriptor CONNECTION_SERVICE = new PropertyDescriptor.Builder()
-            .name("connection.service")
-            .displayName("Connection Service")
-            .description("The controller service that specifies the Kafka endpoint for published FlowFiles.")
-            .identifiesControllerService(KafkaConnectionService.class)
-            .expressionLanguageSupported(NONE)
-            .required(true)
-            .build();
+    private static final List<PropertyDescriptor> DESCRIPTORS = Collections.unmodifiableList(Arrays.asList(
+            CONNECTION_SERVICE,
+            TOPIC_NAME
+    ));
+
+    @Override
+    public List<PropertyDescriptor> getSupportedPropertyDescriptors() {
+        return DESCRIPTORS;
+    }
 
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
@@ -66,23 +80,23 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
                                                  final Map<String, String> attributes) {
         final List<ConfigVerificationResult> verificationResults = new ArrayList<>();
 
-        final String topic = context.getProperty(TOPIC).getValue();
-        final KafkaConnectionService connectionService =
-                context.getProperty(CONNECTION_SERVICE).asControllerService(KafkaConnectionService.class);
+        final KafkaConnectionService connectionService = context.getProperty(CONNECTION_SERVICE).asControllerService(KafkaConnectionService.class);
         final KafkaProducerService producerService = connectionService.getProducerService(new ProducerConfiguration());
 
         final ConfigVerificationResult.Builder verificationPartitions = new ConfigVerificationResult.Builder()
-                .verificationStepName("Determine Topic Partitions");
+                .verificationStepName("Verify Topic Partitions");
+
+        final String topicName = context.getProperty(TOPIC_NAME).evaluateAttributeExpressions(attributes).getValue();
         try {
-            final List<PartitionState> partitionStates = producerService.getPartitionStates(topic);
+            final List<PartitionState> partitionStates = producerService.getPartitionStates(topicName);
             verificationPartitions
                 .outcome(ConfigVerificationResult.Outcome.SUCCESSFUL)
-                .explanation("Determined that there are " + partitionStates.size() + " partitions for topic " + topic);
+                .explanation(String.format("Partitions [%d] found for Topic [%s]", partitionStates.size(), topicName));
         } catch (final Exception e) {
-            getLogger().error("Failed to determine Partition Information for Topic {} in order to verify configuration", topic, e);
+            getLogger().error("Topic [%s] Partition verification failed", topicName, e);
             verificationPartitions
                 .outcome(ConfigVerificationResult.Outcome.FAILED)
-                .explanation("Could not fetch Partition Information: " + e);
+                .explanation(String.format("Topic [%s] Partition access failed: %s", topicName, e));
         }
         verificationResults.add(verificationPartitions.build());
 
