@@ -19,10 +19,12 @@ package org.apache.nifi.kafka.processors;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.PropertyValue;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
-import org.apache.nifi.kafka.processors.producer.FlowFileConversionStrategy;
-import org.apache.nifi.kafka.processors.producer.OneToOneConversionStrategy;
+import org.apache.nifi.kafka.processors.producer.convert.DelimitedStreamKafkaRecordConverter;
+import org.apache.nifi.kafka.processors.producer.convert.FlowFileStreamKafkaRecordConverter;
+import org.apache.nifi.kafka.processors.producer.convert.KafkaRecordConverter;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
@@ -31,6 +33,7 @@ import org.apache.nifi.kafka.service.api.producer.PublishContext;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
+import org.apache.nifi.processor.DataUnit;
 import org.apache.nifi.processor.ProcessContext;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.Relationship;
@@ -40,6 +43,7 @@ import org.apache.nifi.processor.util.StandardValidators;
 
 import java.io.BufferedInputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -72,9 +76,32 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
             .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .build();
 
+    static final PropertyDescriptor MESSAGE_DEMARCATOR = new PropertyDescriptor.Builder()
+            .name("message-demarcator")
+            .displayName("Message Demarcator")
+            .required(false)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
+            .description("Specifies the string (interpreted as UTF-8) to use for demarcating multiple messages within "
+                    + "a single FlowFile. If not specified, the entire content of the FlowFile will be used as a single message. If specified, the "
+                    + "contents of the FlowFile will be split on this delimiter and each section sent as a separate Kafka message. "
+                    + "To enter special character such as 'new line' use CTRL+Enter or Shift+Enter, depending on your OS.")
+            .build();
+
+    static final PropertyDescriptor MAX_REQUEST_SIZE = new PropertyDescriptor.Builder()
+            .name("max.request.size")
+            .displayName("Max Request Size")
+            .description("The maximum size of a request in bytes. Corresponds to Kafka's 'max.request.size' property and defaults to 1 MB (1048576).")
+            .required(true)
+            .addValidator(StandardValidators.DATA_SIZE_VALIDATOR)
+            .defaultValue("1 MB")
+            .build();
+
     private static final List<PropertyDescriptor> DESCRIPTORS = Collections.unmodifiableList(Arrays.asList(
             CONNECTION_SERVICE,
-            TOPIC_NAME
+            TOPIC_NAME,
+            MESSAGE_DEMARCATOR,
+            MAX_REQUEST_SIZE
     ));
 
     @Override
@@ -111,15 +138,29 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         final KafkaProducerService producerService = connectionService.getProducerService(new ProducerConfiguration());
 
         final String topicName = context.getProperty(TOPIC_NAME).evaluateAttributeExpressions(flowFile.getAttributes()).getValue();
+        final PropertyValue propertyDemarcator = context.getProperty(MESSAGE_DEMARCATOR);
+        final int maxMessageSize = context.getProperty(MAX_REQUEST_SIZE).asDataSize(DataUnit.B).intValue();
 
-        final FlowFileConversionStrategy flowFileConversionStrategy = new OneToOneConversionStrategy();
+        final KafkaRecordConverter kafkaConverter = getRecordConverterFor(propertyDemarcator, flowFile, maxMessageSize);
         session.read(flowFile, rawIn -> {
             try (final InputStream in = new BufferedInputStream(rawIn)) {
-                final Iterator<KafkaRecord> records = flowFileConversionStrategy.convert(flowFile, in);
+                final Iterator<KafkaRecord> records = kafkaConverter.convert(flowFile.getAttributes(), in, flowFile.getSize());
                 producerService.send(records, new PublishContext(topicName));
             }
         });
         session.transfer(flowFile, REL_SUCCESS);
+    }
+
+    private KafkaRecordConverter getRecordConverterFor(
+            final PropertyValue propertyValueDemarcator, final FlowFile flowFile, final int maxMessageSize) {
+        final KafkaRecordConverter kafkaConverter;
+        if (propertyValueDemarcator.isSet()) {
+            final String demarcator = propertyValueDemarcator.evaluateAttributeExpressions(flowFile).getValue();
+            kafkaConverter = new DelimitedStreamKafkaRecordConverter(demarcator.getBytes(StandardCharsets.UTF_8), maxMessageSize);
+        } else {
+            kafkaConverter = new FlowFileStreamKafkaRecordConverter(maxMessageSize);
+        }
+        return kafkaConverter;
     }
 
     @Override

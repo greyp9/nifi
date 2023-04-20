@@ -16,13 +16,46 @@
  */
 package org.apache.nifi.kafka.service.api.record;
 
+import org.apache.nifi.kafka.service.api.header.KafkaHeader;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * NiFi representation of a <code>org.apache.kafka.clients.producer.ProducerRecord&lt;byte[], byte[]&gt;</code>,
+ * intended to abstract Kafka library internals from NiFi Kafka processor implementations.
+ */
 public class KafkaRecord {
+    private final String topic;
+    private final Integer partition;
+    private final List<KafkaHeader> headers;
     private final byte[] key;
     private final byte[] value;
+    private final Long timestamp;
 
     public KafkaRecord(final byte[] key, final byte[] value) {
+        this(null, null, key, value);
+    }
+
+    public KafkaRecord(final String topic, final Integer partition, final byte[] key, final byte[] value) {
+        this.topic = topic;
+        this.partition = partition;
+        this.headers = new ArrayList<>();
         this.key = key;
         this.value = value;
+        this.timestamp = null;
+    }
+
+    public String getTopic() {
+        return topic;
+    }
+
+    public Integer getPartition() {
+        return partition;
+    }
+
+    public List<KafkaHeader> getHeaders() {
+        return headers;
     }
 
     public byte[] getKey() {
@@ -31,5 +64,9 @@ public class KafkaRecord {
 
     public byte[] getValue() {
         return value;
+    }
+
+    public Long getTimestamp() {
+        return timestamp;
     }
 }

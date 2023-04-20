@@ -16,6 +16,10 @@
  */
 package org.apache.nifi.kafka.service.api.producer;
 
+/**
+ * Specification of parameters used by a Kafka processor to publish records to Kafka in the context of an enabled
+ * {@link org.apache.nifi.kafka.service.api.KafkaConnectionService}.
+ */
 public class PublishContext {
     private final String topicName;
 

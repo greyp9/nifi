@@ -14,16 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.kafka.processors.producer;
+package org.apache.nifi.kafka.processors.producer.convert;
 
-import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.Iterator;
+import java.util.Map;
 
-public interface FlowFileConversionStrategy {
+/**
+ * {@link KafkaRecordConverter} implementation for transforming NiFi
+ * {@link org.apache.nifi.serialization.record.Record} objects to {@link KafkaRecord} for publish to
+ * Kafka.
+ */
+public class RecordStreamKafkaRecordConverter implements KafkaRecordConverter {
 
-    Iterator<KafkaRecord> convert(FlowFile flowFile, InputStream in) throws IOException;
+    @Override
+    public Iterator<KafkaRecord> convert(
+            final Map<String, String> attributes, final InputStream in, final long inputLength) {
+        throw new UnsupportedOperationException("NIFI-11259");
+    }
 }
