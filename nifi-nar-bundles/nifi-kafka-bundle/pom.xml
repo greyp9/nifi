@@ -31,6 +31,7 @@
     <modules>
         <module>nifi-kafka-2-6-nar</module>
         <module>nifi-kafka-2-6-processors</module>
+        <module>nifi-kafka-3-integration</module>
         <module>nifi-kafka-3-service-nar</module>
         <module>nifi-kafka-3-service</module>
         <module>nifi-kafka-nar</module>

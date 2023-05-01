@@ -25,6 +25,7 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.processors.producer.convert.DelimitedStreamKafkaRecordConverter;
 import org.apache.nifi.kafka.processors.producer.convert.FlowFileStreamKafkaRecordConverter;
 import org.apache.nifi.kafka.processors.producer.convert.KafkaRecordConverter;
+import org.apache.nifi.kafka.processors.producer.convert.RecordStreamKafkaRecordConverter;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
@@ -39,9 +40,13 @@ import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.VerifiableProcessor;
 import org.apache.nifi.processor.exception.ProcessException;
+import org.apache.nifi.processor.io.InputStreamCallback;
 import org.apache.nifi.processor.util.StandardValidators;
+import org.apache.nifi.serialization.RecordReaderFactory;
+import org.apache.nifi.serialization.RecordSetWriterFactory;
 
 import java.io.BufferedInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -76,6 +81,22 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
             .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
             .build();
 
+    static final PropertyDescriptor RECORD_READER = new PropertyDescriptor.Builder()
+            .name("record-reader")
+            .displayName("Record Reader")
+            .description("The Record Reader to use for incoming FlowFiles")
+            .identifiesControllerService(RecordReaderFactory.class)
+            .expressionLanguageSupported(NONE)
+            .build();
+
+    static final PropertyDescriptor RECORD_WRITER = new PropertyDescriptor.Builder()
+            .name("record-writer")
+            .displayName("Record Writer")
+            .description("The Record Writer to use in order to serialize the data before sending to Kafka")
+            .identifiesControllerService(RecordSetWriterFactory.class)
+            .expressionLanguageSupported(NONE)
+            .build();
+
     static final PropertyDescriptor MESSAGE_DEMARCATOR = new PropertyDescriptor.Builder()
             .name("message-demarcator")
             .displayName("Message Demarcator")
@@ -100,6 +121,8 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
     private static final List<PropertyDescriptor> DESCRIPTORS = Collections.unmodifiableList(Arrays.asList(
             CONNECTION_SERVICE,
             TOPIC_NAME,
+            RECORD_READER,
+            RECORD_WRITER,
             MESSAGE_DEMARCATOR,
             MAX_REQUEST_SIZE
     ));
@@ -137,30 +160,64 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         final KafkaConnectionService connectionService = context.getProperty(CONNECTION_SERVICE).asControllerService(KafkaConnectionService.class);
         final KafkaProducerService producerService = connectionService.getProducerService(new ProducerConfiguration());
 
+        final RecordReaderFactory readerFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
+        final RecordSetWriterFactory writerFactory = context.getProperty(RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
+
         final String topicName = context.getProperty(TOPIC_NAME).evaluateAttributeExpressions(flowFile.getAttributes()).getValue();
         final PropertyValue propertyDemarcator = context.getProperty(MESSAGE_DEMARCATOR);
         final int maxMessageSize = context.getProperty(MAX_REQUEST_SIZE).asDataSize(DataUnit.B).intValue();
 
-        final KafkaRecordConverter kafkaConverter = getRecordConverterFor(propertyDemarcator, flowFile, maxMessageSize);
-        session.read(flowFile, rawIn -> {
-            try (final InputStream in = new BufferedInputStream(rawIn)) {
-                final Iterator<KafkaRecord> records = kafkaConverter.convert(flowFile.getAttributes(), in, flowFile.getSize());
-                producerService.send(records, new PublishContext(topicName));
-            }
-        });
+        final KafkaRecordConverter kafkaConverter = getRecordConverterFor(
+                readerFactory, writerFactory, propertyDemarcator, flowFile, maxMessageSize);
+        final PublishCallback callback = new PublishCallback(
+                producerService, topicName, kafkaConverter, flowFile.getAttributes(), flowFile.getSize());
+
+        session.read(flowFile, callback);
         session.transfer(flowFile, REL_SUCCESS);
     }
 
     private KafkaRecordConverter getRecordConverterFor(
+            final RecordReaderFactory readerFactory, final RecordSetWriterFactory writerFactory,
             final PropertyValue propertyValueDemarcator, final FlowFile flowFile, final int maxMessageSize) {
         final KafkaRecordConverter kafkaConverter;
-        if (propertyValueDemarcator.isSet()) {
+        if ((readerFactory != null) && (writerFactory != null)) {
+            kafkaConverter = new RecordStreamKafkaRecordConverter(readerFactory, writerFactory, maxMessageSize, getLogger());
+        } else if (propertyValueDemarcator.isSet()) {
             final String demarcator = propertyValueDemarcator.evaluateAttributeExpressions(flowFile).getValue();
             kafkaConverter = new DelimitedStreamKafkaRecordConverter(demarcator.getBytes(StandardCharsets.UTF_8), maxMessageSize);
         } else {
             kafkaConverter = new FlowFileStreamKafkaRecordConverter(maxMessageSize);
         }
         return kafkaConverter;
+    }
+
+    private static class PublishCallback implements InputStreamCallback {
+        private final KafkaProducerService producerService;
+        private final String topicName;
+        private final KafkaRecordConverter kafkaConverter;
+        private final Map<String, String> attributes;
+        private final long inputLength;
+
+        public PublishCallback(
+                final KafkaProducerService producerService,
+                final String topicName,
+                final KafkaRecordConverter kafkaConverter,
+                final Map<String, String> attributes,
+                final long inputLength) {
+            this.producerService = producerService;
+            this.topicName = topicName;
+            this.kafkaConverter = kafkaConverter;
+            this.attributes = attributes;
+            this.inputLength = inputLength;
+        }
+
+        @Override
+        public void process(final InputStream in) throws IOException {
+            try (final InputStream is = new BufferedInputStream(in)) {
+                final Iterator<KafkaRecord> records = kafkaConverter.convert(attributes, is, inputLength);
+                producerService.send(records, new PublishContext(topicName));
+            }
+        }
     }
 
     @Override

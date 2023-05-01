@@ -16,10 +16,25 @@
  */
 package org.apache.nifi.kafka.processors.producer.convert;
 
+import org.apache.nifi.kafka.processors.producer.common.ProducerUtils;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
+import org.apache.nifi.logging.ComponentLog;
+import org.apache.nifi.schema.access.SchemaNotFoundException;
+import org.apache.nifi.serialization.MalformedRecordException;
+import org.apache.nifi.serialization.RecordReader;
+import org.apache.nifi.serialization.RecordReaderFactory;
+import org.apache.nifi.serialization.RecordSetWriter;
+import org.apache.nifi.serialization.RecordSetWriterFactory;
+import org.apache.nifi.serialization.record.Record;
+import org.apache.nifi.serialization.record.RecordSchema;
+import org.apache.nifi.serialization.record.RecordSet;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -28,10 +43,54 @@ import java.util.Map;
  * Kafka.
  */
 public class RecordStreamKafkaRecordConverter implements KafkaRecordConverter {
+    private final RecordReaderFactory readerFactory;
+    private final RecordSetWriterFactory writerFactory;
+    private final int maxMessageSize;
+    private final ComponentLog logger;
+
+    public RecordStreamKafkaRecordConverter(
+            final RecordReaderFactory readerFactory,
+            final RecordSetWriterFactory writerFactory,
+            final int maxMessageSize,
+            final ComponentLog logger) {
+        this.readerFactory = readerFactory;
+        this.writerFactory = writerFactory;
+        this.maxMessageSize = maxMessageSize;
+        this.logger = logger;
+    }
 
     @Override
     public Iterator<KafkaRecord> convert(
-            final Map<String, String> attributes, final InputStream in, final long inputLength) {
-        throw new UnsupportedOperationException("NIFI-11259");
+            final Map<String, String> attributes, final InputStream in, final long inputLength)
+            throws IOException {
+        try {
+            final RecordReader reader = readerFactory.createRecordReader(attributes, in, inputLength, logger);
+            final RecordSet recordSet = reader.createRecordSet();
+            final RecordSchema schema = writerFactory.getSchema(attributes, recordSet.getSchema());
+            final List<KafkaRecord> kafkaRecords = toKafkaRecords(attributes, recordSet, schema);
+            return kafkaRecords.iterator();
+        } catch (MalformedRecordException | SchemaNotFoundException e) {
+            throw new IOException(e);
+        }
+    }
+
+    private List<KafkaRecord> toKafkaRecords(
+            final Map<String, String> attributes, final RecordSet recordSet, final RecordSchema schema)
+            throws IOException, SchemaNotFoundException {
+        final List<KafkaRecord> kafkaRecords = new ArrayList<>();
+        final ByteArrayOutputStream os = new ByteArrayOutputStream();
+        try (final RecordSetWriter writer = writerFactory.createWriter(logger, schema, os, attributes)) {
+            Record record = recordSet.next();
+            while (record != null) {
+                writer.write(record);
+                writer.flush();
+                final byte[] value = os.toByteArray();
+                ProducerUtils.checkMessageSize(maxMessageSize, value.length);
+                kafkaRecords.add(new KafkaRecord(null, value));
+                os.reset();
+                record = recordSet.next();
+            }
+        }
+        return kafkaRecords;
     }
 }
