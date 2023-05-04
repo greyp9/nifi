@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.TopicListing;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.nifi.annotation.lifecycle.OnDisabled;
 import org.apache.nifi.annotation.lifecycle.OnEnabled;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
@@ -86,9 +87,21 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
 
     private Properties clientProperties;
 
+    private Kafka3ConsumerService consumerService;
+
     @OnEnabled
     public void onEnabled(final ConfigurationContext configurationContext) {
         clientProperties = getClientProperties(configurationContext);
+        consumerService = new Kafka3ConsumerService(getLogger(), clientProperties);
+    }
+
+    @OnDisabled
+    public void onDisabled() {
+        if (consumerService == null) {
+            getLogger().warn("Consumer Service not configured");
+        } else {
+            consumerService.close();
+        }
     }
 
     @Override
@@ -98,7 +111,7 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
 
     @Override
     public KafkaConsumerService getConsumerService(final ConsumerConfiguration consumerConfiguration) {
-        return new Kafka3ConsumerService(clientProperties);
+        return consumerService;
     }
 
     @Override

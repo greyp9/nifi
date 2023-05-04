@@ -17,25 +17,29 @@
 package org.apache.nifi.kafka.service.consumer;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
 import org.apache.nifi.kafka.service.api.consumer.PollingContext;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
 import org.apache.nifi.kafka.service.api.record.RecordSummary;
+import org.apache.nifi.kafka.service.consumer.pool.ConsumerObjectPool;
+import org.apache.nifi.logging.ComponentLog;
 
+import java.io.Closeable;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public class Kafka3ConsumerService implements KafkaConsumerService {
-    private final Consumer<byte[], byte[]> consumer;
+public class Kafka3ConsumerService implements KafkaConsumerService, Closeable {
+    private final ComponentLog componentLog;
 
-    public Kafka3ConsumerService(final Properties properties) {
-        final ByteArrayDeserializer deserializer = new ByteArrayDeserializer();
-        this.consumer = new KafkaConsumer<>(properties, deserializer, deserializer);
+    private final ConsumerObjectPool consumerObjectPool;
+
+    public Kafka3ConsumerService(final ComponentLog componentLog, final Properties properties) {
+        this.componentLog = Objects.requireNonNull(componentLog, "Component Log required");
+        this.consumerObjectPool = new ConsumerObjectPool(properties);
     }
 
     @Override
@@ -49,9 +53,34 @@ public class Kafka3ConsumerService implements KafkaConsumerService {
 
     @Override
     public List<PartitionState> getPartitionStates(final String topic) {
-        final List<PartitionInfo> partitionInfos = consumer.partitionsFor(topic);
-        return partitionInfos.stream()
-                .map(p -> new PartitionState(p.topic(), p.partition()))
-                .collect(Collectors.toList());
+            return runConsumerFunction((consumer) ->
+                consumer.partitionsFor(topic)
+                        .stream()
+                        .map(partitionInfo -> new PartitionState(partitionInfo.topic(), partitionInfo.partition()))
+                        .collect(Collectors.toList())
+            );
+    }
+
+    @Override
+    public void close() {
+        consumerObjectPool.close();
+    }
+
+    private <T> T runConsumerFunction(final Function<Consumer<byte[], byte[]>, T> consumerFunction) throws IllegalStateException {
+        Consumer<byte[], byte[]> consumer = null;
+        try {
+            consumer = consumerObjectPool.borrowObject();
+            return consumerFunction.apply(consumer);
+        } catch (final Exception e) {
+            throw new RuntimeException("Borrow Consumer failed", e);
+        } finally {
+            if (consumer != null) {
+                try {
+                    consumerObjectPool.returnObject(consumer);
+                } catch (final Exception e) {
+                    componentLog.warn("Return Consumer failed", e);
+                }
+            }
+        }
     }
 }
