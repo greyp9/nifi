@@ -17,6 +17,10 @@
 package org.apache.nifi.kafka.processors.producer.convert;
 
 import org.apache.nifi.kafka.processors.producer.common.ProducerUtils;
+import org.apache.nifi.kafka.processors.producer.key.AttributeKeyFactory;
+import org.apache.nifi.kafka.processors.producer.key.KeyFactory;
+import org.apache.nifi.kafka.processors.producer.value.RecordValueFactory;
+import org.apache.nifi.kafka.processors.producer.value.ValueFactory;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.schema.access.SchemaNotFoundException;
@@ -25,16 +29,15 @@ import org.apache.nifi.serialization.RecordReader;
 import org.apache.nifi.serialization.RecordReaderFactory;
 import org.apache.nifi.serialization.RecordSetWriter;
 import org.apache.nifi.serialization.RecordSetWriterFactory;
-import org.apache.nifi.serialization.record.Record;
+import org.apache.nifi.serialization.record.PushBackRecordSet;
 import org.apache.nifi.serialization.record.RecordSchema;
 import org.apache.nifi.serialization.record.RecordSet;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
+import java.io.UncheckedIOException;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -45,16 +48,22 @@ import java.util.Map;
 public class RecordStreamKafkaRecordConverter implements KafkaRecordConverter {
     private final RecordReaderFactory readerFactory;
     private final RecordSetWriterFactory writerFactory;
+    private final String keyAttribute;
+    private final String keyAttributeEncoding;
     private final int maxMessageSize;
     private final ComponentLog logger;
 
     public RecordStreamKafkaRecordConverter(
             final RecordReaderFactory readerFactory,
             final RecordSetWriterFactory writerFactory,
+            final String keyAttribute,
+            final String keyAttributeEncoding,
             final int maxMessageSize,
             final ComponentLog logger) {
         this.readerFactory = readerFactory;
         this.writerFactory = writerFactory;
+        this.keyAttribute = keyAttribute;
+        this.keyAttributeEncoding = keyAttributeEncoding;
         this.maxMessageSize = maxMessageSize;
         this.logger = logger;
     }
@@ -67,30 +76,45 @@ public class RecordStreamKafkaRecordConverter implements KafkaRecordConverter {
             final RecordReader reader = readerFactory.createRecordReader(attributes, in, inputLength, logger);
             final RecordSet recordSet = reader.createRecordSet();
             final RecordSchema schema = writerFactory.getSchema(attributes, recordSet.getSchema());
-            final List<KafkaRecord> kafkaRecords = toKafkaRecords(attributes, recordSet, schema);
-            return kafkaRecords.iterator();
+
+            final ByteArrayOutputStream os = new ByteArrayOutputStream();
+            final RecordSetWriter writer = writerFactory.createWriter(logger, schema, os, attributes);
+            final PushBackRecordSet pushBackRecordSet = new PushBackRecordSet(recordSet);
+            return toKafkaRecordIterator(attributes, os, writer, pushBackRecordSet);
         } catch (MalformedRecordException | SchemaNotFoundException e) {
             throw new IOException(e);
         }
     }
 
-    private List<KafkaRecord> toKafkaRecords(
-            final Map<String, String> attributes, final RecordSet recordSet, final RecordSchema schema)
-            throws IOException, SchemaNotFoundException {
-        final List<KafkaRecord> kafkaRecords = new ArrayList<>();
-        final ByteArrayOutputStream os = new ByteArrayOutputStream();
-        try (final RecordSetWriter writer = writerFactory.createWriter(logger, schema, os, attributes)) {
-            Record record = recordSet.next();
-            while (record != null) {
-                writer.write(record);
-                writer.flush();
-                final byte[] value = os.toByteArray();
-                ProducerUtils.checkMessageSize(maxMessageSize, value.length);
-                kafkaRecords.add(new KafkaRecord(null, value));
-                os.reset();
-                record = recordSet.next();
+    private Iterator<KafkaRecord> toKafkaRecordIterator(
+            final Map<String, String> attributes,
+            final ByteArrayOutputStream os,
+            final RecordSetWriter writer,
+            final PushBackRecordSet pushBackRecordSet) {
+        final KeyFactory keyFactory = new AttributeKeyFactory(attributes, keyAttribute, keyAttributeEncoding);
+        final ValueFactory valueFactory = new RecordValueFactory(os, writer, pushBackRecordSet);
+
+        return new Iterator<>() {
+            @Override
+            public boolean hasNext() {
+                try {
+                    return pushBackRecordSet.isAnotherRecord();
+                } catch (final IOException e) {
+                    throw new UncheckedIOException(e);
+                }
             }
-        }
-        return kafkaRecords;
+
+            @Override
+            public KafkaRecord next() {
+                try {
+                    final byte[] recordKey = keyFactory.getKey();
+                    final byte[] recordValue = valueFactory.getValue();
+                    ProducerUtils.checkMessageSize(maxMessageSize, recordValue.length);
+                    return new KafkaRecord(recordKey, recordValue);
+                } catch (final IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
+        };
     }
 }

@@ -17,6 +17,7 @@
 package org.apache.nifi.kafka.processors;
 
 import org.apache.nifi.annotation.documentation.Tags;
+import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.PropertyValue;
@@ -32,6 +33,7 @@ import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
+import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.DataUnit;
@@ -62,6 +64,10 @@ import static org.apache.nifi.expression.ExpressionLanguageScope.NONE;
 
 @Tags({"kafka", "producer", "record"})
 public class PublishKafka extends AbstractProcessor implements VerifiableProcessor {
+
+    static final AllowableValue UTF8_ENCODING = new AllowableValue("utf-8", "UTF-8 Encoded", "The key is interpreted as a UTF-8 Encoded string.");
+    static final AllowableValue HEX_ENCODING = new AllowableValue("hex", "Hex Encoded",
+            "The key is interpreted as arbitrary binary data that is encoded using hexadecimal characters with uppercase letters.");
 
     static final PropertyDescriptor CONNECTION_SERVICE = new PropertyDescriptor.Builder()
             .name("Kafka Connection Service")
@@ -118,12 +124,36 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
             .defaultValue("1 MB")
             .build();
 
+    static final PropertyDescriptor KEY = new PropertyDescriptor.Builder()
+            .name("kafka-key")
+            .displayName("Kafka Key")
+            .description("The Key to use for the Message. "
+                    + "If not specified, the flow file attribute 'kafka.key' is used as the message key, if it is present."
+                    + "Beware that setting Kafka key and demarcating at the same time may potentially lead to many Kafka messages with the same key."
+                    + "Normally this is not a problem as Kafka does not enforce or assume message and key uniqueness. Still, setting the demarcator and Kafka key at the same time poses a risk of "
+                    + "data loss on Kafka. During a topic compaction on Kafka, messages will be deduplicated based on this key.")
+            .required(false)
+            .addValidator(StandardValidators.NON_EMPTY_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
+            .build();
+
+    static final PropertyDescriptor KEY_ATTRIBUTE_ENCODING = new PropertyDescriptor.Builder()
+            .name("key-attribute-encoding")
+            .displayName("Key Attribute Encoding")
+            .description("FlowFiles that are emitted have an attribute named '" + KafkaFlowFileAttribute.KAFKA_KEY + "'. This property dictates how the value of the attribute should be encoded.")
+            .required(true)
+            .defaultValue(UTF8_ENCODING.getValue())
+            .allowableValues(UTF8_ENCODING, HEX_ENCODING)
+            .build();
+
     private static final List<PropertyDescriptor> DESCRIPTORS = Collections.unmodifiableList(Arrays.asList(
             CONNECTION_SERVICE,
             TOPIC_NAME,
             RECORD_READER,
             RECORD_WRITER,
             MESSAGE_DEMARCATOR,
+            KEY,
+            KEY_ATTRIBUTE_ENCODING,
             MAX_REQUEST_SIZE
     ));
 
@@ -167,8 +197,11 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         final PropertyValue propertyDemarcator = context.getProperty(MESSAGE_DEMARCATOR);
         final int maxMessageSize = context.getProperty(MAX_REQUEST_SIZE).asDataSize(DataUnit.B).intValue();
 
+        final String keyAttribute = context.getProperty(KEY).getValue();
+        final String keyAttributeEncoding = context.getProperty(KEY_ATTRIBUTE_ENCODING).getValue();
+
         final KafkaRecordConverter kafkaConverter = getRecordConverterFor(
-                readerFactory, writerFactory, propertyDemarcator, flowFile, maxMessageSize);
+                readerFactory, writerFactory, keyAttribute, keyAttributeEncoding, propertyDemarcator, flowFile, maxMessageSize);
         final PublishCallback callback = new PublishCallback(
                 producerService, topicName, kafkaConverter, flowFile.getAttributes(), flowFile.getSize());
 
@@ -178,10 +211,11 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
 
     private KafkaRecordConverter getRecordConverterFor(
             final RecordReaderFactory readerFactory, final RecordSetWriterFactory writerFactory,
+            final String keyAttribute, final String keyAttributeEncoding,
             final PropertyValue propertyValueDemarcator, final FlowFile flowFile, final int maxMessageSize) {
         final KafkaRecordConverter kafkaConverter;
         if ((readerFactory != null) && (writerFactory != null)) {
-            kafkaConverter = new RecordStreamKafkaRecordConverter(readerFactory, writerFactory, maxMessageSize, getLogger());
+            kafkaConverter = new RecordStreamKafkaRecordConverter(readerFactory, writerFactory, keyAttribute, keyAttributeEncoding, maxMessageSize, getLogger());
         } else if (propertyValueDemarcator.isSet()) {
             final String demarcator = propertyValueDemarcator.evaluateAttributeExpressions(flowFile).getValue();
             kafkaConverter = new DelimitedStreamKafkaRecordConverter(demarcator.getBytes(StandardCharsets.UTF_8), maxMessageSize);

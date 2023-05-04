@@ -51,7 +51,6 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 @TestMethodOrder(MethodOrderer.MethodName.class)
 public class PublishKafkaRecordIT {
@@ -62,6 +61,9 @@ public class PublishKafkaRecordIT {
     private static final String SERVICE_ID = Kafka3ConnectionService.class.getSimpleName();
 
     private static final String TEST_RESOURCE = "org/apache/nifi/kafka/processors/publish/ff.json";
+
+    private static final String KEY_ATTRIBUTE_KEY = "keyAttribute";
+    private static final String KEY_ATTRIBUTE_VALUE = "keyAttributeValue";
 
     private static final int TEST_RECORD_COUNT = 3;
 
@@ -98,6 +100,7 @@ public class PublishKafkaRecordIT {
 
         runner.setProperty(PublishKafka.CONNECTION_SERVICE, SERVICE_ID);
         runner.setProperty(PublishKafka.TOPIC_NAME, TEST_TOPIC);
+        runner.setProperty(PublishKafka.KEY, KEY_ATTRIBUTE_KEY);
 
         final String readerId = "record-reader";
         final RecordReaderFactory readerService = new JsonTreeReader();
@@ -110,7 +113,9 @@ public class PublishKafkaRecordIT {
         runner.enableControllerService(writerService);
         runner.setProperty(writerId, writerId);
 
-        runner.enqueue(bytesJson);
+        final Map<String, String> attributes = new HashMap<>();
+        attributes.put(KEY_ATTRIBUTE_KEY, KEY_ATTRIBUTE_VALUE);
+        runner.enqueue(bytesJson, attributes);
         runner.run(1);
         runner.assertAllFlowFilesTransferred(PublishKafka.REL_SUCCESS, 1);
     }
@@ -131,7 +136,7 @@ public class PublishKafkaRecordIT {
             final ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
             assertEquals(TEST_RECORD_COUNT, records.count());
             for (ConsumerRecord<String, String> record : records) {
-                assertNull(record.key());
+                assertEquals(KEY_ATTRIBUTE_VALUE, record.key());
                 assertNotNull(objectMapper.readTree(record.value()));
             }
         }
