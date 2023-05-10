@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.apache.nifi.kafka.processors.ConsumeKafka.CONNECTION_SERVICE;
+import static org.apache.nifi.kafka.processors.ConsumeKafka.GROUP_ID;
 import static org.apache.nifi.kafka.processors.PublishKafka.TOPIC_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -47,6 +48,8 @@ class ConsumeKafkaTest {
     private static final int FIRST_PARTITION = 0;
 
     private static final String SERVICE_ID = KafkaConnectionService.class.getSimpleName();
+
+    private static final String CONSUMER_GROUP_ID = ConsumeKafkaTest.class.getSimpleName();
 
     @Mock
     KafkaConnectionService kafkaConnectionService;
@@ -72,6 +75,7 @@ class ConsumeKafkaTest {
         runner.assertNotValid();
 
         runner.setProperty(TOPIC_NAME, TEST_TOPIC_NAME);
+        runner.setProperty(GROUP_ID, CONSUMER_GROUP_ID);
         runner.assertValid();
     }
 
@@ -84,6 +88,7 @@ class ConsumeKafkaTest {
         when(kafkaConnectionService.getConsumerService(any())).thenReturn(kafkaConsumerService);
 
         runner.setProperty(TOPIC_NAME, TEST_TOPIC_NAME);
+        runner.setProperty(GROUP_ID, CONSUMER_GROUP_ID);
 
         final List<ConfigVerificationResult> results = processor.verify(runner.getProcessContext(), runner.getLogger(), Collections.emptyMap());
         assertEquals(1, results.size());
@@ -100,6 +105,7 @@ class ConsumeKafkaTest {
         setConnectionService();
 
         runner.setProperty(TOPIC_NAME, TEST_TOPIC_NAME);
+        runner.setProperty(GROUP_ID, CONSUMER_GROUP_ID);
 
         final List<ConfigVerificationResult> results = processor.verify(runner.getProcessContext(), runner.getLogger(), Collections.emptyMap());
         assertEquals(1, results.size());
