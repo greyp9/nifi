@@ -14,28 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.kafka.service.api.consumer;
+package org.apache.nifi.kafka.service.consumer.pool;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 
-public class PollingContext {
+/**
+ * Subscription for pooled Kafka Consumers
+ */
+public class Subscription {
     private final String groupId;
 
     private final Collection<String> topics;
 
     private final Pattern topicPattern;
 
-    public PollingContext(final String groupId, final Collection<String> topics) {
+    public Subscription(final String groupId, final Collection<String> topics) {
         this.groupId = Objects.requireNonNull(groupId, "Group ID required");
         this.topics = Collections.unmodifiableCollection(Objects.requireNonNull(topics, "Topics required"));
         this.topicPattern = null;
     }
 
-    public PollingContext(final String groupId, final Pattern topicPattern) {
+    public Subscription(final String groupId, final Pattern topicPattern) {
         this.groupId = Objects.requireNonNull(groupId, "Group ID required");
         this.topics = Collections.emptyList();
         this.topicPattern = Objects.requireNonNull(topicPattern, "Topic Patten required");
@@ -51,5 +55,42 @@ public class PollingContext {
 
     public Optional<Pattern> getTopicPattern() {
         return Optional.ofNullable(topicPattern);
+    }
+
+    @Override
+    public boolean equals(final Object object) {
+        final boolean equals;
+
+        if (object == null) {
+            equals = false;
+        } else if (object instanceof Subscription) {
+            final Subscription subscription = (Subscription) object;
+            if (groupId.equals(subscription.groupId)) {
+                if (topics.equals(subscription.topics)) {
+                    equals = Objects.equals(topicPattern, subscription.topicPattern);
+                } else {
+                    equals = false;
+                }
+            } else {
+                equals = false;
+            }
+        } else {
+            equals = false;
+        }
+
+        return equals;
+    }
+
+    @Override
+    public int hashCode() {
+        final int hashCode;
+
+        if (topicPattern == null) {
+            hashCode = Arrays.hashCode(new Object[]{groupId, topics});
+        } else {
+            hashCode = Arrays.hashCode(new Object[]{groupId, topics, topicPattern});
+        }
+
+        return hashCode;
     }
 }

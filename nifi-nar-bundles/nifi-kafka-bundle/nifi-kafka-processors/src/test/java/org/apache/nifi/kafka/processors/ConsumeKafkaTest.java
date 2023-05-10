@@ -37,7 +37,6 @@ import static org.apache.nifi.kafka.processors.PublishKafka.TOPIC_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -80,7 +79,7 @@ class ConsumeKafkaTest {
     public void testVerifySuccessful() throws InitializationException {
         final PartitionState firstPartitionState = new PartitionState(TEST_TOPIC_NAME, FIRST_PARTITION);
         final List<PartitionState> partitionStates = Collections.singletonList(firstPartitionState);
-        when(kafkaConsumerService.getPartitionStates(eq(TEST_TOPIC_NAME))).thenReturn(partitionStates);
+        when(kafkaConsumerService.getPartitionStates(any())).thenReturn(partitionStates);
         setConnectionService();
         when(kafkaConnectionService.getConsumerService(any())).thenReturn(kafkaConsumerService);
 
@@ -96,7 +95,7 @@ class ConsumeKafkaTest {
 
     @Test
     public void testVerifyFailed() throws InitializationException {
-        when(kafkaConsumerService.getPartitionStates(eq(TEST_TOPIC_NAME))).thenThrow(new IllegalStateException());
+        when(kafkaConsumerService.getPartitionStates(any())).thenThrow(new IllegalStateException());
         when(kafkaConnectionService.getConsumerService(any())).thenReturn(kafkaConsumerService);
         setConnectionService();
 

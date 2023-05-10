@@ -25,6 +25,7 @@ import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
+import org.apache.nifi.kafka.service.api.consumer.PollingContext;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
@@ -59,7 +60,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 public class Kafka3ConnectionServiceIT {
     private static final String IMAGE_NAME = "confluentinc/cp-kafka:7.3.2";
 
-    private static final String TEST_TOPIC = "nifi-" + System.currentTimeMillis();
+    private static final String GROUP_ID = Kafka3ConnectionService.class.getSimpleName();
+
+    private static final String TOPIC = Kafka3ConnectionServiceIT.class.getSimpleName();
 
     private static final String SERVICE_ID = Kafka3ConnectionService.class.getSimpleName();
 
@@ -85,9 +88,9 @@ public class Kafka3ConnectionServiceIT {
         try (final Admin adminClient = Admin.create(properties)) {
             final int numPartitions = 1;
             final short replicationFactor = 1;
-            final NewTopic newTopic = new NewTopic(TEST_TOPIC, numPartitions, replicationFactor);
+            final NewTopic newTopic = new NewTopic(TOPIC, numPartitions, replicationFactor);
             final CreateTopicsResult topics = adminClient.createTopics(Collections.singleton(newTopic));
-            final KafkaFuture<Void> topicFuture = topics.values().get(TEST_TOPIC);
+            final KafkaFuture<Void> topicFuture = topics.values().get(TOPIC);
             topicFuture.get(1, TimeUnit.SECONDS);
         }
     }
@@ -111,7 +114,7 @@ public class Kafka3ConnectionServiceIT {
         final KafkaProducerService producerService = service.getProducerService(new ProducerConfiguration());
         final KafkaRecord kafkaRecord = new KafkaRecord(null, TEST_RECORD_VALUE.getBytes(StandardCharsets.UTF_8));
         final List<KafkaRecord> kafkaRecords = Collections.singletonList(kafkaRecord);
-        final RecordSummary summary = producerService.send(kafkaRecords.iterator(), new PublishContext(TEST_TOPIC));
+        final RecordSummary summary = producerService.send(kafkaRecords.iterator(), new PublishContext(TOPIC));
         assertNotNull(summary);
     }
 
@@ -152,10 +155,9 @@ public class Kafka3ConnectionServiceIT {
         runner.enableControllerService(service);
 
         final KafkaProducerService producerService = service.getProducerService(null);
-        final List<PartitionState> partitionStates = producerService.getPartitionStates(TEST_TOPIC);
+        final List<PartitionState> partitionStates = producerService.getPartitionStates(TOPIC);
         assertPartitionStatesFound(partitionStates);
     }
-
 
     @Test
     void testGetConsumerService() {
@@ -163,14 +165,17 @@ public class Kafka3ConnectionServiceIT {
         runner.enableControllerService(service);
 
         final KafkaConsumerService consumerService = service.getConsumerService(null);
-        final List<PartitionState> partitionStates = consumerService.getPartitionStates(TEST_TOPIC);
+
+        final PollingContext pollingContext = new PollingContext(GROUP_ID, Collections.singleton(TOPIC));
+
+        final List<PartitionState> partitionStates = consumerService.getPartitionStates(pollingContext);
         assertPartitionStatesFound(partitionStates);
     }
 
     private void assertPartitionStatesFound(final List<PartitionState> partitionStates) {
         assertEquals(1, partitionStates.size());
         final PartitionState partitionState = partitionStates.iterator().next();
-        assertEquals(TEST_TOPIC, partitionState.getTopic());
+        assertEquals(TOPIC, partitionState.getTopic());
         assertEquals(0, partitionState.getPartition());
     }
 }

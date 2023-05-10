@@ -24,6 +24,7 @@ import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.ConsumerConfiguration;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
+import org.apache.nifi.kafka.service.api.consumer.PollingContext;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -52,6 +53,15 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .required(true)
             .build();
 
+    static final PropertyDescriptor GROUP_ID = new PropertyDescriptor.Builder()
+            .name("Group ID")
+            .displayName("Group ID")
+            .description("Kafka Consumer Group Identifier corresponding to Kafka group.id property")
+            .required(true)
+            .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.FLOWFILE_ATTRIBUTES)
+            .build();
+
     static final PropertyDescriptor TOPIC_NAME = new PropertyDescriptor.Builder()
             .name("Topic Name")
             .displayName("Topic Name")
@@ -63,6 +73,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
 
     private static final List<PropertyDescriptor> DESCRIPTORS = Collections.unmodifiableList(Arrays.asList(
             CONNECTION_SERVICE,
+            GROUP_ID,
             TOPIC_NAME
     ));
 
@@ -85,9 +96,12 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         final ConfigVerificationResult.Builder verificationPartitions = new ConfigVerificationResult.Builder()
                 .verificationStepName("Verify Topic Partitions");
 
+        final String groupId = context.getProperty(GROUP_ID).evaluateAttributeExpressions(attributes).getValue();
         final String topicName = context.getProperty(TOPIC_NAME).evaluateAttributeExpressions(attributes).getValue();
+
+        final PollingContext pollingContext = new PollingContext(groupId, Collections.singleton(topicName));
         try {
-            final List<PartitionState> partitionStates = consumerService.getPartitionStates(topicName);
+            final List<PartitionState> partitionStates = consumerService.getPartitionStates(pollingContext);
             verificationPartitions
                     .outcome(ConfigVerificationResult.Outcome.SUCCESSFUL)
                     .explanation(String.format("Partitions [%d] found for Topic [%s]", partitionStates.size(), topicName));

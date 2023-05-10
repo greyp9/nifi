@@ -19,21 +19,30 @@ package org.apache.nifi.kafka.service.consumer.pool;
 import org.apache.commons.pool2.PooledObject;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ConsumerPooledObjectFactoryTest {
-    private static final String BOOTSTRAP_SERVERS = "127.0.0.1:9092";
+    private static final String GROUP_ID = ConsumerPooledObjectFactoryTest.class.getSimpleName();
+
+    private static final String TOPIC = String.class.getSimpleName();
+
+    @Mock
+    ConsumerFactory consumerFactory;
 
     @Mock
     Consumer<byte[], byte[]> mockConsumer;
@@ -43,15 +52,20 @@ class ConsumerPooledObjectFactoryTest {
     @BeforeEach
     void setFactory() {
         final Properties properties = new Properties();
-        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
-        factory = new ConsumerPooledObjectFactory(properties);
+        factory = new ConsumerPooledObjectFactory(properties, consumerFactory);
     }
 
     @Test
     void testCreate() {
-        final Consumer<byte[], byte[]> consumer = factory.create();
+        final Collection<String> topics = Collections.singleton(TOPIC);
+        final Subscription subscription = new Subscription(GROUP_ID, topics);
+
+        when(consumerFactory.newConsumer(any(Properties.class))).thenReturn(mockConsumer);
+        final Consumer<byte[], byte[]> consumer = factory.create(subscription);
 
         assertNotNull(consumer);
+
+        verify(mockConsumer).subscribe(anyCollection());
     }
 
     @Test
@@ -65,7 +79,8 @@ class ConsumerPooledObjectFactoryTest {
     void testDestroyObject() {
         final PooledObject<Consumer<byte[], byte[]>> pooledObject = new DefaultPooledObject<>(mockConsumer);
 
-        factory.destroyObject(pooledObject);
+        final Subscription subscription = new Subscription(GROUP_ID, Collections.singleton(TOPIC));
+        factory.destroyObject(subscription, pooledObject);
 
         verify(mockConsumer).close();
     }

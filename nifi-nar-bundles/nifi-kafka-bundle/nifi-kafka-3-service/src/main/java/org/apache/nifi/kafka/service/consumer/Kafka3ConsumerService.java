@@ -23,13 +23,18 @@ import org.apache.nifi.kafka.service.api.consumer.PollingContext;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
 import org.apache.nifi.kafka.service.api.record.RecordSummary;
 import org.apache.nifi.kafka.service.consumer.pool.ConsumerObjectPool;
+import org.apache.nifi.kafka.service.consumer.pool.Subscription;
 import org.apache.nifi.logging.ComponentLog;
 
 import java.io.Closeable;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class Kafka3ConsumerService implements KafkaConsumerService, Closeable {
@@ -52,13 +57,31 @@ public class Kafka3ConsumerService implements KafkaConsumerService, Closeable {
     }
 
     @Override
-    public List<PartitionState> getPartitionStates(final String topic) {
-            return runConsumerFunction((consumer) ->
-                consumer.partitionsFor(topic)
-                        .stream()
-                        .map(partitionInfo -> new PartitionState(partitionInfo.topic(), partitionInfo.partition()))
-                        .collect(Collectors.toList())
+    public List<PartitionState> getPartitionStates(final PollingContext pollingContext) {
+        final String groupId = pollingContext.getGroupId();
+        final Optional<Pattern> topicPatternFound = pollingContext.getTopicPattern();
+
+        final Subscription subscription = topicPatternFound
+                .map(pattern -> new Subscription(groupId, pattern))
+                .orElseGet(() -> new Subscription(groupId, pollingContext.getTopics()));
+
+        final Iterator<String> topics = subscription.getTopics().iterator();
+
+        final List<PartitionState> partitionStates;
+
+        if (topics.hasNext()) {
+            final String topic = topics.next();
+            partitionStates = runConsumerFunction(subscription, (consumer) ->
+                    consumer.partitionsFor(topic)
+                            .stream()
+                            .map(partitionInfo -> new PartitionState(partitionInfo.topic(), partitionInfo.partition()))
+                            .collect(Collectors.toList())
             );
+        } else {
+            partitionStates = Collections.emptyList();
+        }
+
+        return partitionStates;
     }
 
     @Override
@@ -66,17 +89,17 @@ public class Kafka3ConsumerService implements KafkaConsumerService, Closeable {
         consumerObjectPool.close();
     }
 
-    private <T> T runConsumerFunction(final Function<Consumer<byte[], byte[]>, T> consumerFunction) throws IllegalStateException {
+    private <T> T runConsumerFunction(final Subscription subscription, final Function<Consumer<byte[], byte[]>, T> consumerFunction) {
         Consumer<byte[], byte[]> consumer = null;
         try {
-            consumer = consumerObjectPool.borrowObject();
+            consumer = consumerObjectPool.borrowObject(subscription);
             return consumerFunction.apply(consumer);
         } catch (final Exception e) {
-            throw new RuntimeException("Borrow Consumer failed", e);
+            throw new ConsumerException("Borrow Consumer failed", e);
         } finally {
             if (consumer != null) {
                 try {
-                    consumerObjectPool.returnObject(consumer);
+                    consumerObjectPool.returnObject(subscription, consumer);
                 } catch (final Exception e) {
                     componentLog.warn("Return Consumer failed", e);
                 }

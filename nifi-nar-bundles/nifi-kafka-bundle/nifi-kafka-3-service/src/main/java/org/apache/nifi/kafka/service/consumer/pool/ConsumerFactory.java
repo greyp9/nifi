@@ -14,19 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.kafka.service.api.consumer;
+package org.apache.nifi.kafka.service.consumer.pool;
 
-import org.apache.nifi.kafka.service.api.common.PartitionState;
-import org.apache.nifi.kafka.service.api.record.ByteRecord;
-import org.apache.nifi.kafka.service.api.record.RecordSummary;
+import org.apache.kafka.clients.consumer.Consumer;
 
-import java.util.List;
+import java.util.Properties;
 
-public interface KafkaConsumerService {
-
-    void commit(RecordSummary recordSummary);
-
-    Iterable<ByteRecord> poll(PollingContext pollingContext);
-
-    List<PartitionState> getPartitionStates(PollingContext pollingContext);
+/**
+ * Factory abstraction for creating Kafka Consumer objects
+ */
+interface ConsumerFactory {
+    /**
+     * Create new Kafka Consumer using supplied Properties
+     *
+     * @param properties Consumer configuration properties
+     * @return Kafka Consumer
+     */
+    Consumer<byte[], byte[]> newConsumer(Properties properties);
 }

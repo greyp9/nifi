@@ -17,20 +17,26 @@
 package org.apache.nifi.kafka.service.consumer.pool;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
+import java.util.Objects;
 import java.util.Properties;
 
 /**
- * Kafka Consumer Object Pool
+ * Standard Kafka Consumer Factory with Byte Array Deserializer for Key and Value elements
  */
-public class ConsumerObjectPool extends GenericKeyedObjectPool<Subscription, Consumer<byte[], byte[]>> {
+class StandardConsumerFactory implements ConsumerFactory {
     /**
-     * Consumer Object Pool constructor with Kafka Consumer Properties
+     * Create new Kafka Consumer with Byte Array Deserializer and configured properties
      *
-     * @param consumerProperties Kafka Consumer Properties required
+     * @param properties Consumer configuration properties
+     * @return Kafka Consumer
      */
-    public ConsumerObjectPool(final Properties consumerProperties) {
-        super(new ConsumerPooledObjectFactory(consumerProperties, new StandardConsumerFactory()));
+    @Override
+    public Consumer<byte[], byte[]> newConsumer(final Properties properties) {
+        Objects.requireNonNull(properties, "Properties required");
+        final ByteArrayDeserializer deserializer = new ByteArrayDeserializer();
+        return new KafkaConsumer<>(properties, deserializer, deserializer);
     }
 }

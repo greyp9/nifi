@@ -14,19 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.nifi.kafka.service.api.consumer;
+package org.apache.nifi.kafka.service.consumer;
 
-import org.apache.nifi.kafka.service.api.common.PartitionState;
-import org.apache.nifi.kafka.service.api.record.ByteRecord;
-import org.apache.nifi.kafka.service.api.record.RecordSummary;
+/**
+ * Kafka Consumer Exception indicating problems interacting with consumer objects
+ */
+public class ConsumerException extends RuntimeException {
 
-import java.util.List;
-
-public interface KafkaConsumerService {
-
-    void commit(RecordSummary recordSummary);
-
-    Iterable<ByteRecord> poll(PollingContext pollingContext);
-
-    List<PartitionState> getPartitionStates(PollingContext pollingContext);
+    public ConsumerException(final String message, final Throwable cause) {
+        super(message, cause);
+    }
 }
