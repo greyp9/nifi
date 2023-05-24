@@ -2619,15 +2619,32 @@ in the cluster. This allows one node to pick up where another node left off, or 
 
 [[state_providers]]
 === Configuring State Providers
-When a component decides to store or retrieve state, it does so by providing a "Scope" - either Node-local or Cluster-wide. The
-mechanism that is used to store and retrieve this state is then determined based on this Scope, as well as the configured State
-Providers. The _nifi.properties_ file contains three different properties that are relevant to configuring these State Providers.
+When a component decides to store or retrieve state, it does so by providing a `Scope`, either `Local` to the node or
+applicable to the entire `Cluster`. Component implementation code and configuration properties determine the requested
+Scope, which the framework provides according to the State Management configuration. The `nifi.properties` configuration
+contains several properties for managing these State Providers.
 
 |====
 |*Property*|*Description*
-|`nifi.state.management.configuration.file`|The first is the property that specifies an external XML file that is used for configuring the local and/or cluster-wide State Providers. This XML file may contain configurations for multiple providers
-|`nifi.state.management.provider.local`|The property that provides the identifier of the local State Provider configured in this XML file
-|`nifi.state.management.provider.cluster`|Similarly, the property provides the identifier of the cluster-wide State Provider configured in this XML file.
+|`nifi.state.management.configuration.file`|The configuration file specifies the path to an external XML file that the
+framework uses to configure State Providers. This XML file may contain configurations for multiple providers.
+|`nifi.state.management.provider.local`|The Local Provider stores current Local State information. The property value
+identifies a Local Provider in the State Management configuration that the framework will use for storing and retrieving
+Local State for requesting components.
+|`nifi.state.management.provider.cluster`|The Cluster Provider stores current Cluster State information. The property
+value identifies a Cluster Provider in the State Management configuration that the framework will use for storing and
+retrieving Cluster State for requesting components.
+|`nifi.state.management.provider.cluster.previous`|The Previous Cluster State Provider enables population of the current
+Cluster State from an existing Provider. The property value identifies a Cluster Provider in the State Management
+configuration that the framework will use as the initial source of Cluster State when the current Cluster State Provider
+is has no information stored.
+
+The framework enumerates the Current Cluster Provider when a node becomes Primary, and proceeds to check the Previous
+Cluster Provider when the Current Cluster Provider does not contain any component information. The Previous Cluster
+Provider property value can be set to blank after cluster startup following a successful Cluster State restore from
+backup.
+
+The default value is blank.
 |====
 
 This XML file consists of a top-level `state-management` element, which has one or more `local-provider` and zero or more `cluster-provider`
@@ -3028,22 +3045,6 @@ nifi.state.management.embedded.zookeeper.properties=./conf/zookeeper.properties
 nifi.state.management.configuration.file=./conf/state-management.xml
 nifi.state.management.provider.cluster=zk-provider
 --
-
-[[zookeeper_migrator]]
-=== ZooKeeper Migrator
-You can use the `zk-migrator` tool to perform the following tasks:
-
-* Moving ZooKeeper information from one ZooKeeper cluster to another
-* Migrating ZooKeeper node ownership
-
-For example, you may want to use the ZooKeeper Migrator when you are:
-
-* Upgrading from NiFi 0.x to NiFi 1.x in which embedded ZooKeepers are used
-* Migrating from an embedded ZooKeeper in NiFi 0.x or 1.x to an external ZooKeeper
-* Upgrading from NiFi 0.x with an external ZooKeeper to NiFi 1.x with the same external ZooKeeper
-* Migrating from an external ZooKeeper to an embedded ZooKeeper in NiFi 1.x
-
-For more information, see the <<toolkit-guide.adoc#zookeeper_migrator,ZooKeeper Migrator>> section in the link:toolkit-guide.html[NiFi Toolkit Guide].
 
 [[bootstrap_properties]]
 == Bootstrap Properties
@@ -4174,6 +4175,8 @@ request headers. The default value is:
 The CustomRequestLog writes formatted messages using the following SLF4J logger:
 
 `org.apache.nifi.web.server.RequestLog`
+|`nifi.web.jmx.metrics.allowed.filter.pattern`|The regular expression controlling the JMX MBean names that the REST API
+is allowed to return. The default value is empty, blocking all MBeans. Configuring `.*` allows all registered MBeans.
 |====
 
 [[security_properties]]
@@ -4467,7 +4470,7 @@ The NiFi Registry NAR provider retrieves NARs from a NiFi Registry instance. In 
 
 |====
 |*Property*|*Description*
-|`nifi.nar.library.provider.nifi-registry.implementation`| The fully qualified class name of the implementation class which is `org.apache.nifi.registry.extension.NiFiRegistryNarProvider`.
+|`nifi.nar.library.provider.nifi-registry.implementation`| The fully qualified class name of the implementation class which is `org.apache.nifi.registry.extension.NiFiRegistryExternalResourceProvider`.
 |`nifi.nar.library.provider.nifi-registry.url`| The URL of the NiFi Registry instance, such as `http://localhost:18080`. If the URL begins with `https`, then the NiFi keystore and truststore will be used to make the TLS connection.
 |====
 
@@ -4816,8 +4819,6 @@ Example configuration:
    nifi.nar.library.provider.hdfs2.resources=/etc/hadoop/core-site.xml
    nifi.nar.library.provider.hdfs2.source.directory=/other/dir/for/customNars
 
-NOTE: For backward compatibility reasons, `org.apache.nifi.nar.hadoop.HDFSNarProvider` is still an accepted implementation, but it is suggested to use 'org.apache.nifi.flow.resource.hadoop.HDFSExternalResourceProvider' instead.Features introduced with the External Resource Provider might not work with this implementation!
-
 [[nifi_diagnostics]]
 == NiFi diagnostics
 
@@ -4844,3 +4845,37 @@ nifi.diagnostics.on.shutdown.max.directory.size=10 MB
 ```
 
 In the case of a lengthy diagnostic, NiFi may terminate before the command execution ends. In this case, the `graceful.shutdown.seconds` property should be set to a higher value in the `bootstrap.conf` configuration file.
+
+[[jmx_metrics]]
+== JMX Metrics
+
+It is possible to get JMX metrics using the REST API with read permissions on system diagnostics resources.
+
+The information available depends on the registered MBeans. Metrics can contain data related to performance indicators.
+
+Listing of MBeans is controlled using a regular expression pattern in application properties. Leaving the
+property empty means no MBeans will be returned. The default value blocks all MBeans and must be changed to return
+information.
+
+ nifi.web.jmx.metrics.allowed.filter.pattern=.*
+
+An optionally provided query parameter using a regular expression pattern, will display only MBeans with matching names.
+Leaving this parameter empty means listing all MBeans except those filtered out by the blocked filter pattern.
+
+ https://localhost:8443/nifi-api/system-diagnostics/jmx-metrics?beanNameFilter=bean.name.1|bean.name.2
+
+An example output would look like this:
+
+ [
+   {
+     "beanName" : "bean.name.1,type=type1",
+     "attributeName" : “attribute-name",
+     "attributeValue" : “attribute-value”
+   },
+   {
+     "beanName" : "bean.name.2, type=type2",
+     "attributeName" : "attribute-name",
+     "attributeValue" : integer-value
+   }
+ ]
+

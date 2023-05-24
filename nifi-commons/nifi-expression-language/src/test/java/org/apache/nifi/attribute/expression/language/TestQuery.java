@@ -22,6 +22,7 @@ import org.apache.nifi.attribute.expression.language.evaluation.NumberQueryResul
 import org.apache.nifi.attribute.expression.language.evaluation.QueryResult;
 import org.apache.nifi.attribute.expression.language.exception.AttributeExpressionLanguageException;
 import org.apache.nifi.attribute.expression.language.exception.AttributeExpressionLanguageParsingException;
+import org.apache.nifi.expression.AttributeExpression;
 import org.apache.nifi.expression.AttributeExpression.ResultType;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.parameter.Parameter;
@@ -36,7 +37,6 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.Double.NEGATIVE_INFINITY;
@@ -61,6 +62,7 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
@@ -385,10 +387,9 @@ public class TestQuery {
 
         // the date.toString() above will end up truncating the milliseconds. So remove millis from the Date before
         // formatting it
-        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss.SSS", Locale.US);
-        final long millis = date.getTime() % 1000L;
-        final Date roundedToNearestSecond = new Date(date.getTime() - millis);
-        final String formatted = sdf.format(roundedToNearestSecond);
+        final DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss.SSS", Locale.US);
+        final Instant truncatedSecond = date.toInstant().truncatedTo(ChronoUnit.SECONDS);
+        final String formatted = dtf.format(truncatedSecond);
 
         final QueryResult<?> result = query.evaluate(new StandardEvaluationContext(attributes));
         assertEquals(ResultType.STRING, result.getResultType());
@@ -775,7 +776,7 @@ public class TestQuery {
     @Test
     public void testProblematic1() {
         // There was a bug that prevented this expression from compiling. This test just verifies that it now compiles.
-        final String queryString = "${xx:append( \"120101\" ):toDate( 'yyMMddHHmmss' ):format( \"yy-MM-dd’T’HH:mm:ss\") }";
+        final String queryString = "${xx:append( \"120101\" ):toDate( 'yyMMddHHmmss' ):format( \"yy-MM-dd'T'HH:mm:ss\") }";
         Query.compile(queryString);
     }
 
@@ -942,11 +943,18 @@ public class TestQuery {
         final String format = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
 
         final String query = "startDateTime=\"${date:toNumber():toDate():format(\"" + format + "\")}\"";
-        final String result = Query.evaluateExpressions(query, attributes, null);
 
-        final String expectedTime = new SimpleDateFormat(format, Locale.US).format(timestamp);
-        assertEquals("startDateTime=\"" + expectedTime + "\"", result);
+        TimeZone current = TimeZone.getDefault();
+        TimeZone defaultTimeZone = TimeZone.getTimeZone("Europe/Kiev");
+        TimeZone.setDefault(defaultTimeZone);
+        try {
+            final String result = Query.evaluateExpressions(query, attributes, null);
 
+            final String expectedTime = DateTimeFormatter.ofPattern(format, Locale.US).format(Instant.ofEpochMilli(timestamp).atZone(defaultTimeZone.toZoneId()));
+            assertEquals("startDateTime=\"" + expectedTime + "\"", result);
+        } finally {
+            TimeZone.setDefault(current);
+        }
         final List<Range> ranges = Query.extractExpressionRanges(query);
         assertEquals(1, ranges.size());
     }
@@ -969,6 +977,28 @@ public class TestQuery {
 
         final List<Range> ranges = Query.extractExpressionRanges(query);
         assertEquals(1, ranges.size());
+    }
+
+    @Test
+    public void testFormatUsesLocalTimeZoneUnlessIsSpecified() {
+        TimeZone current = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("Europe/Kiev"));
+        try {
+            final String formatWithZoneInvocation = "format(\"yyyy-MM-dd HH:mm:ss\", \"GMT\")";
+            assertEquals("2020-01-01 00:00:00", evaluateFormatDate("2020-01-01 00:00:00", formatWithZoneInvocation));
+
+            final String formatWithoutZoneInvocation = "format(\"yyyy-MM-dd HH:mm:ss\")";
+            assertEquals("2020-02-01 02:00:00", evaluateFormatDate("2020-02-01 00:00:00", formatWithoutZoneInvocation));
+        } finally {
+            TimeZone.setDefault(current);
+        }
+    }
+
+    private String evaluateFormatDate(String givenDateStringInGMT, String formatInvocation) {
+        final Map<String, String> attributes = new HashMap<>();
+        attributes.put("date", String.valueOf(givenDateStringInGMT));
+        final String query = "${date:toDate(\"yyyy-MM-dd HH:mm:ss\", \"GMT\"):" + formatInvocation + "}";
+        return Query.evaluateExpressions(query, attributes, null);
     }
 
     @Test
@@ -1175,6 +1205,98 @@ public class TestQuery {
         attributes.put("attr", "hello");
 
         verifyEquals("${attr:replaceAll('.*?(l+).*', '$1')}", attributes, "ll");
+    }
+
+    @Test
+    public void testReplaceShouldReplaceAllLiteralMatches() {
+        int n = 3;
+        final String originalValue = "Hello World";
+        final Map<String, String> attributes = Map.of("single", originalValue,
+                "repeating", StringUtils.repeat(originalValue, " ", n));
+        final String replacementValue = "Goodbye Planet";
+        final String expectedRepeatingResult = StringUtils.repeat(replacementValue, " ", n);
+        final String replaceSingleExpression = "${single:replace('" + originalValue + "', '" + replacementValue + "')}";
+        final String replaceRepeatingExpression = "${repeating:replace('" + originalValue + "', '" + replacementValue + "')}";
+        Query replaceSingleQuery = Query.compile(replaceSingleExpression);
+        Query replaceRepeatingQuery = Query.compile(replaceRepeatingExpression);
+
+        QueryResult<?> replaceSingleResult = replaceSingleQuery.evaluate(new StandardEvaluationContext(attributes));
+        QueryResult<?> replaceRepeatingResult = replaceRepeatingQuery.evaluate(new StandardEvaluationContext(attributes));
+
+        assertEquals(replacementValue, replaceSingleResult.getValue());
+        assertEquals(AttributeExpression.ResultType.STRING, replaceSingleResult.getResultType());
+        assertEquals(expectedRepeatingResult, replaceRepeatingResult.getValue());
+        assertEquals(AttributeExpression.ResultType.STRING, replaceRepeatingResult.getResultType());
+    }
+
+    @Test
+    public void testReplaceFirstShouldOnlyReplaceFirstRegexMatch() {
+        int n = 3;
+        final String originalValue = "Hello World";
+        final Map<String, String> attributes = Map.of("single", originalValue,
+                "repeating", StringUtils.repeat(originalValue, " ", n));
+
+        final String replacementValue = "Goodbye Planet";
+        final String expectedRepeatingResult = replacementValue + " " + StringUtils.repeat(originalValue, " ", n -1);
+        final String replaceOnlyFirstPattern = "\\w+\\s\\w+\\b??";
+        final String replaceSingleExpression = "${single:replaceFirst('" + replaceOnlyFirstPattern +"', '" + replacementValue + "')}";
+        final String replaceRepeatingExpression = "${repeating:replaceFirst('" + replaceOnlyFirstPattern + "', '" + replacementValue + "')}";
+        Query replaceSingleQuery = Query.compile(replaceSingleExpression);
+        Query replaceRepeatingQuery = Query.compile(replaceRepeatingExpression);
+
+        QueryResult<?> replaceSingleResult = replaceSingleQuery.evaluate(new StandardEvaluationContext(attributes));
+        QueryResult<?> replaceRepeatingResult = replaceRepeatingQuery.evaluate(new StandardEvaluationContext(attributes));
+
+        assertEquals(replacementValue, replaceSingleResult.getValue());
+        assertEquals(AttributeExpression.ResultType.STRING, replaceSingleResult.getResultType());
+        assertEquals(expectedRepeatingResult, replaceRepeatingResult.getValue());
+        assertEquals(AttributeExpression.ResultType.STRING, replaceRepeatingResult.getResultType());
+    }
+
+    @Test
+    public void testReplaceFirstShouldOnlyReplaceFirstLiteralMatch() {
+        int n = 3;
+        final String originalValue = "Hello World";
+        final Map<String, String> attributes = Map.of("single", originalValue,
+                "repeating", StringUtils.repeat(originalValue, " ", n));
+        final String replacementValue = "Goodbye Planet";
+        final String expectedRepeatingResult = replacementValue + " " + StringUtils.repeat(originalValue, " ", n -1);
+        final String replaceSingleExpression = "${single:replaceFirst('" + originalValue + "', '" + replacementValue + "')}";
+        final String replaceRepeatingExpression = "${repeating:replaceFirst('" + originalValue + "', '" + replacementValue + "')}";
+        Query replaceSingleQuery = Query.compile(replaceSingleExpression);
+        Query replaceRepeatingQuery = Query.compile(replaceRepeatingExpression);
+
+        QueryResult<?> replaceSingleResult = replaceSingleQuery.evaluate(new StandardEvaluationContext(attributes));
+        QueryResult<?> replaceRepeatingResult = replaceRepeatingQuery.evaluate(new StandardEvaluationContext(attributes));
+
+        assertEquals(replacementValue, replaceSingleResult.getValue());
+        assertEquals(AttributeExpression.ResultType.STRING, replaceSingleResult.getResultType());
+        assertEquals(expectedRepeatingResult, replaceRepeatingResult.getValue());
+        assertEquals(AttributeExpression.ResultType.STRING, replaceRepeatingResult.getResultType());
+    }
+
+    @Test
+    public void testShouldDemonstrateDifferenceBetweenStringReplaceAndStringReplaceFirst() {
+        int n = 3;
+        final String originalValue = "Hello World";
+        final Map<String, String> attributes = Map.of("single", originalValue,
+                "repeating", StringUtils.repeat(originalValue, " ", n));
+        final String replacementValue = "Goodbye Planet";
+        final String expectedRepeatingResult = replacementValue + " " + StringUtils.repeat(originalValue, " ", n -1);
+        final String replaceOnlyFirstPattern = "\\w+\\s\\w+\\b??";
+
+        // Execute on both single and repeating with String#replace()
+        String replaceSingleResult = attributes.get("single").replace(replaceOnlyFirstPattern, replacementValue);
+        String replaceRepeatingResult = attributes.get("repeating").replace(replaceOnlyFirstPattern, replacementValue);
+
+        // Execute on both single and repeating with String#replaceFirst()
+        String replaceFirstSingleResult = attributes.get("single").replaceFirst(replaceOnlyFirstPattern, replacementValue);
+        String replaceFirstRepeatingResult = attributes.get("repeating").replaceFirst(replaceOnlyFirstPattern, replacementValue);
+
+        assertNotEquals(replacementValue, replaceSingleResult);
+        assertNotEquals(expectedRepeatingResult, replaceRepeatingResult);
+        assertEquals(replacementValue, replaceFirstSingleResult);
+        assertEquals(expectedRepeatingResult, replaceFirstRepeatingResult);
     }
 
     @Test
@@ -1839,6 +1961,13 @@ public class TestQuery {
         final Map<String, String> attributes = new HashMap<>();
         attributes.put("blue", "20130917162643");
         verifyEquals("${blue:toDate('yyyyMMddHHmmss'):format(\"yyyy/MM/dd HH:mm:ss.SSS'Z'\")}", attributes, "2013/09/17 16:26:43.000Z");
+    }
+
+    @Test
+    public void testDateFormatConversionIsCaseInsensitive() {
+        final Map<String, String> attributes = new HashMap<>();
+        attributes.put("blue", "10may2004");
+        verifyEquals("${blue:toDate('ddMMMyyyy'):format('yyyy/MM/dd')}", attributes, "2004/05/10");
     }
 
     @Test

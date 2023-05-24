@@ -53,6 +53,7 @@
         <nifi.state.management.embedded.zookeeper.properties>./conf/zookeeper.properties</nifi.state.management.embedded.zookeeper.properties>
         <nifi.state.management.provider.local>local-provider</nifi.state.management.provider.local>
         <nifi.state.management.provider.cluster>zk-provider</nifi.state.management.provider.cluster>
+        <nifi.state.management.provider.cluster.previous/>
 
         <nifi.flowfile.repository.implementation>org.apache.nifi.controller.repository.WriteAheadFlowFileRepository</nifi.flowfile.repository.implementation>
         <nifi.flowfile.repository.wal.implementation>org.apache.nifi.wali.SequentialAccessWriteAheadLog</nifi.flowfile.repository.wal.implementation>
@@ -140,6 +141,7 @@
         <nifi.web.request.ip.whitelist />
         <nifi.web.should.send.server.version>true</nifi.web.should.send.server.version>
         <nifi.web.request.log.format>%{client}a - %u %t "%r" %s %O "%{Referer}i" "%{User-Agent}i"</nifi.web.request.log.format>
+        <nifi.web.jmx.metrics.allowed.filter.pattern />
         <!-- nifi.properties: security properties -->
         <nifi.security.autoreload.enabled>false</nifi.security.autoreload.enabled>
         <nifi.security.autoreload.interval>10 secs</nifi.security.autoreload.interval>

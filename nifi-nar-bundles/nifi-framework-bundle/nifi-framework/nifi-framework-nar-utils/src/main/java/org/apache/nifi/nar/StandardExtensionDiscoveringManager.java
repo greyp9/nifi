@@ -127,7 +127,6 @@ public class StandardExtensionDiscoveringManager implements ExtensionDiscovering
         definitionMap.put(ContentRepository.class, new HashSet<>());
         definitionMap.put(StateProvider.class, new HashSet<>());
         definitionMap.put(StatusAnalyticsModel.class, new HashSet<>());
-        definitionMap.put(NarProvider.class, new HashSet<>());
         definitionMap.put(ExternalResourceProvider.class, new HashSet<>());
         definitionMap.put(FlowRegistryClient.class, new HashSet<>());
         definitionMap.put(LeaderElectionManager.class, new HashSet<>());
@@ -368,10 +367,6 @@ public class StandardExtensionDiscoveringManager implements ExtensionDiscovering
         }
     }
 
-    protected void addTempComponent(final ConfigurableComponent instance, final BundleCoordinate coordinate) {
-        final String cacheKey = getClassBundleKey(instance.getClass().getCanonicalName(), coordinate);
-        tempComponentLookup.put(cacheKey, instance);
-    }
 
     /**
      * Registers extension for the specified type from the specified Bundle.
