@@ -1817,6 +1817,7 @@ public final class DtoFactory {
         // build the descriptor and property dtos
         dto.setDescriptors(new LinkedHashMap<>());
         dto.setProperties(new LinkedHashMap<>());
+        dto.setSensitiveDynamicPropertyNames(new LinkedHashSet<>());
         for (final Map.Entry<PropertyDescriptor, String> entry : orderedProperties.entrySet()) {
             final PropertyDescriptor descriptor = entry.getKey();
 
@@ -1828,6 +1829,7 @@ public final class DtoFactory {
             String propertyValue = entry.getValue();
             if (propertyValue != null && descriptor.isSensitive()) {
                 propertyValue = SENSITIVE_VALUE_MASK;
+                dto.getSensitiveDynamicPropertyNames().add(descriptor.getName());
             } else if (propertyValue == null && descriptor.getDefaultValue() != null) {
                 propertyValue = descriptor.getDefaultValue();
             }
