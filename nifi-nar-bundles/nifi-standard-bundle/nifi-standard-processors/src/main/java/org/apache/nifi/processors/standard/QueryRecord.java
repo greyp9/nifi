@@ -323,22 +323,20 @@ public class QueryRecord extends AbstractProcessor {
                         transformed = session.write(transformed, new OutputStreamCallback() {
                             @Override
                             public void process(final OutputStream out) throws IOException {
-                                final ResultSetRecordSet recordSet;
                                 final RecordSchema writeSchema;
 
-                                try {
-                                    recordSet = new ResultSetRecordSet(rs, writerSchema, defaultPrecision, defaultScale);
+                                try (final ResultSetRecordSet recordSet = new ResultSetRecordSet(rs, writerSchema, defaultPrecision, defaultScale)) {
                                     final RecordSchema resultSetSchema = recordSet.getSchema();
                                     writeSchema = recordSetWriterFactory.getSchema(originalAttributes, resultSetSchema);
+
+                                    try (final RecordSetWriter resultSetWriter = recordSetWriterFactory.createWriter(getLogger(), writeSchema, out, originalFlowFile)) {
+                                        writeResultRef.set(resultSetWriter.write(recordSet));
+                                        mimeTypeRef.set(resultSetWriter.getMimeType());
+                                    } catch (final Exception e) {
+                                        throw new IOException(e);
+                                    }
                                 } catch (final SQLException | SchemaNotFoundException e) {
                                     throw new ProcessException(e);
-                                }
-
-                                try (final RecordSetWriter resultSetWriter = recordSetWriterFactory.createWriter(getLogger(), writeSchema, out, originalFlowFile)) {
-                                    writeResultRef.set(resultSetWriter.write(recordSet));
-                                    mimeTypeRef.set(resultSetWriter.getMimeType());
-                                } catch (final Exception e) {
-                                    throw new IOException(e);
                                 }
                             }
                         });
