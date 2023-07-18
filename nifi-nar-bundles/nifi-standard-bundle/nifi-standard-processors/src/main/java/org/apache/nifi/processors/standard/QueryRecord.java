@@ -50,24 +50,21 @@ import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.ProcessorInitializationContext;
 import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.exception.ProcessException;
-import org.apache.nifi.processor.io.OutputStreamCallback;
 import org.apache.nifi.processors.standard.calcite.RecordPathFunctions;
+import org.apache.nifi.processors.standard.calcite.RecordResultSetOutputStreamCallback;
 import org.apache.nifi.queryrecord.FlowFileTable;
-import org.apache.nifi.schema.access.SchemaNotFoundException;
 import org.apache.nifi.serialization.RecordReader;
 import org.apache.nifi.serialization.RecordReaderFactory;
-import org.apache.nifi.serialization.RecordSetWriter;
 import org.apache.nifi.serialization.RecordSetWriterFactory;
 import org.apache.nifi.serialization.WriteResult;
 import org.apache.nifi.serialization.record.RecordSchema;
-import org.apache.nifi.serialization.record.ResultSetRecordSet;
 import org.apache.nifi.util.StopWatch;
+import org.apache.nifi.util.StringUtils;
 import org.apache.nifi.util.Tuple;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -77,6 +74,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -84,7 +82,6 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 import static org.apache.nifi.util.db.JdbcProperties.DEFAULT_PRECISION;
@@ -294,7 +291,6 @@ public class QueryRecord extends AbstractProcessor {
         }
 
         // Determine the schema for writing the data
-        final Map<String, String> originalAttributes = original.getAttributes();
         int recordsRead = 0;
 
         try {
@@ -313,57 +309,40 @@ public class QueryRecord extends AbstractProcessor {
 
                 try {
                     final String sql = context.getProperty(descriptor).evaluateAttributeExpressions(original).getValue();
-                    final AtomicReference<WriteResult> writeResultRef = new AtomicReference<>();
                     final QueryResult queryResult = query(session, original, readerSchema, sql, recordReaderFactory);
 
-                    final AtomicReference<String> mimeTypeRef = new AtomicReference<>();
-                    final FlowFile originalFlowFile = original;
+                    final int recordCount;
+                    final String mimeType;
+                    final Map<String, String> attributes = new LinkedHashMap<>();
+                    final ResultSet rs = queryResult.getResultSet();
                     try {
-                        final ResultSet rs = queryResult.getResultSet();
-                        transformed = session.write(transformed, new OutputStreamCallback() {
-                            @Override
-                            public void process(final OutputStream out) throws IOException {
-                                final RecordSchema writeSchema;
-
-                                try (final ResultSetRecordSet recordSet = new ResultSetRecordSet(rs, writerSchema, defaultPrecision, defaultScale)) {
-                                    final RecordSchema resultSetSchema = recordSet.getSchema();
-                                    writeSchema = recordSetWriterFactory.getSchema(originalAttributes, resultSetSchema);
-
-                                    try (final RecordSetWriter resultSetWriter = recordSetWriterFactory.createWriter(getLogger(), writeSchema, out, originalFlowFile)) {
-                                        writeResultRef.set(resultSetWriter.write(recordSet));
-                                        mimeTypeRef.set(resultSetWriter.getMimeType());
-                                    } catch (final Exception e) {
-                                        throw new IOException(e);
-                                    }
-                                } catch (final SQLException | SchemaNotFoundException e) {
-                                    throw new ProcessException(e);
-                                }
-                            }
-                        });
+                        final RecordResultSetOutputStreamCallback writer = new RecordResultSetOutputStreamCallback(
+                                getLogger(), rs, defaultPrecision, defaultScale, writerSchema, recordSetWriterFactory, original);
+                        transformed = session.write(transformed, writer);
+                        final WriteResult writeResult = writer.getWriteResult();
+                        recordCount = writeResult.getRecordCount();
+                        attributes.putAll(writeResult.getAttributes());
+                        mimeType = writer.getMimeType();
                     } finally {
-                        closeQuietly(queryResult);
+                        closeQuietly(rs, queryResult);
                     }
 
                     recordsRead = Math.max(recordsRead, queryResult.getRecordsRead());
-                    final WriteResult result = writeResultRef.get();
-                    if (result.getRecordCount() == 0 && !context.getProperty(INCLUDE_ZERO_RECORD_FLOWFILES).asBoolean()) {
+                    if (recordCount == 0 && !context.getProperty(INCLUDE_ZERO_RECORD_FLOWFILES).asBoolean()) {
                         session.remove(transformed);
                         flowFileRemoved = true;
                         transformedFlowFiles.remove(transformed);
                         getLogger().info("Transformed {} but the result contained no data so will not pass on a FlowFile", new Object[] {original});
                     } else {
-                        final Map<String, String> attributesToAdd = new HashMap<>();
-                        if (result.getAttributes() != null) {
-                            attributesToAdd.putAll(result.getAttributes());
+                        if (StringUtils.isNotEmpty(mimeType)) {
+                            attributes.put(CoreAttributes.MIME_TYPE.key(), mimeType);
                         }
-
-                        attributesToAdd.put(CoreAttributes.MIME_TYPE.key(), mimeTypeRef.get());
-                        attributesToAdd.put("record.count", String.valueOf(result.getRecordCount()));
-                        attributesToAdd.put(ROUTE_ATTRIBUTE_KEY, relationship.getName());
-                        transformed = session.putAllAttributes(transformed, attributesToAdd);
+                        attributes.put("record.count", String.valueOf(recordCount));
+                        attributes.put(ROUTE_ATTRIBUTE_KEY, relationship.getName());
+                        transformed = session.putAllAttributes(transformed, attributes);
                         transformedFlowFiles.put(transformed, relationship);
 
-                        session.adjustCounter("Records Written", result.getRecordCount(), false);
+                        session.adjustCounter("Records Written", recordCount, false);
                     }
                 } finally {
                     // Ensure that we have the FlowFile in the set in case we throw any Exception
