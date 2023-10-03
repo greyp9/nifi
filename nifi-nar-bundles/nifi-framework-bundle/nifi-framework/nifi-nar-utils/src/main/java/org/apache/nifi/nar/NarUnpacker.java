@@ -40,6 +40,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -54,6 +55,7 @@ import java.util.jar.JarFile;
 import java.util.jar.JarInputStream;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
+import java.util.stream.Stream;
 
 import static java.lang.String.format;
 
@@ -328,6 +330,17 @@ public final class NarUnpacker {
             logger.debug("Directory {} already exists. Will not verify hash. Assuming nothing has changed.", narWorkingDirectory);
         }
 
+        return narWorkingDirectory;
+    }
+
+    public static File removeUnpackedNar(final File nar, final File baseWorkingDirectory) throws IOException {
+        final File narWorkingDirectory = new File(baseWorkingDirectory, nar.getName() + "-unpacked");
+        logger.trace("Removing unpacked NAR {}", narWorkingDirectory.getPath());
+        try (final Stream<Path> walk = Files.walk(narWorkingDirectory.toPath())) {
+            walk.sorted(Comparator.reverseOrder())
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+        }
         return narWorkingDirectory;
     }
 

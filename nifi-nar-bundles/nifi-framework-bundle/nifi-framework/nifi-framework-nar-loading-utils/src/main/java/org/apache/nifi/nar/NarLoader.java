@@ -32,4 +32,11 @@ public interface NarLoader {
      */
     NarLoadResult load(final Collection<File> narFiles);
 
+    /**
+     * Unloads the given NARs.
+     *
+     * @param narFiles the collection of NAR files to unload
+     * @return the result of unloading the NARs (i.e. bundles that were unloaded, bundles that were skipped)
+     */
+    NarLoadResult unload(final Collection<File> narFiles);
 }

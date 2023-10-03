@@ -69,7 +69,7 @@ public class NarAutoLoader {
 
         final WatchService watcher = FileSystems.getDefault().newWatchService();
         final Path autoLoadPath = autoLoadDir.toPath();
-        autoLoadPath.register(watcher, StandardWatchEventKinds.ENTRY_CREATE);
+        autoLoadPath.register(watcher, StandardWatchEventKinds.ENTRY_CREATE, StandardWatchEventKinds.ENTRY_DELETE);
 
         narAutoLoaderTask = new NarAutoLoaderTask.Builder()
                 .autoLoadPath(autoLoadPath)

@@ -656,6 +656,14 @@ public class StandardExtensionDiscoveringManager implements ExtensionDiscovering
     }
 
     @Override
+    public Bundle removeBundle(final BundleCoordinate bundleCoordinate) {
+        logger.info("Remove bundle (bundleCoordinate: {}, {}, {})",
+                bundleCoordinate.getGroup(), bundleCoordinate.getId(), bundleCoordinate.getVersion());
+        bundleCoordinateClassesLookup.remove(bundleCoordinate);
+        return bundleCoordinateBundleLookup.remove(bundleCoordinate);
+    }
+
+    @Override
     public Set<ExtensionDefinition> getTypes(final BundleCoordinate bundleCoordinate) {
         if (bundleCoordinate == null) {
             throw new IllegalArgumentException("BundleCoordinate cannot be null");

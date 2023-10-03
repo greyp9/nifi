@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -73,7 +74,7 @@ public class StandardNarLoader implements NarLoader {
 
     @Override
     public synchronized NarLoadResult load(final Collection<File> narFiles) {
-        LOGGER.info("Starting load process for {} NARs...", new Object[]{narFiles.size()});
+        LOGGER.info("NAR count {}, Starting load process for {} NARs...", narClassLoaders.getBundles().size(), narFiles.size());
 
         final List<File> unpackedNars = new ArrayList<>();
 
@@ -132,7 +133,7 @@ public class StandardNarLoader implements NarLoader {
             }
         }
 
-        LOGGER.info("Finished NAR loading process!");
+        LOGGER.info("NAR count {}, Finished NAR loading process!", narClassLoaders.getBundles().size());
         return narLoadResult;
     }
 
@@ -174,4 +175,30 @@ public class StandardNarLoader implements NarLoader {
         }
     }
 
+    @Override
+    public synchronized NarLoadResult unload(final Collection<File> narFiles) {
+        LOGGER.info("NAR count {}, Starting unload process for {} NARs...", narClassLoaders.getBundles().size(), narFiles.size());
+        for (final File narFile : narFiles) {
+            LOGGER.info("Unload NAR {}", narFile.getPath());
+            final NarLoadResult narLoadResult = narClassLoaders.unloadAdditionalNar(narFile);
+            for (Bundle unloadedBundle : narLoadResult.getLoadedBundles()) {
+                final BundleCoordinate bundleCoordinate = unloadedBundle.getBundleDetails().getCoordinate();
+                LOGGER.trace("Remove extension manager bundle {}", bundleCoordinate);
+                extensionManager.removeBundle(bundleCoordinate);
+            }
+
+            try {
+                final File unpackedExtension = NarUnpacker.removeUnpackedNar(narFile, extensionsWorkingDir);
+                LOGGER.info("Removed unpacked NAR '{}'.", unpackedExtension.getPath());
+            } catch (IOException e) {
+                LOGGER.warn("Failed to remove unpacked NAR '{}'.", narFile.getPath());
+            }
+
+            final boolean deleted = narFile.delete();
+            LOGGER.info("pgrey-231002 - removed = {}, NAR '{}'.", deleted, narFile);
+        }
+
+        LOGGER.info("NAR count {}, Finished NAR unloading process!", narClassLoaders.getBundles().size());
+        return new NarLoadResult(Collections.emptySet(), Collections.emptySet());
+    }
 }

@@ -64,41 +64,47 @@ public class NarAutoLoaderTask implements Runnable {
             try {
                 WatchKey key;
                 try {
-                    LOGGER.debug("Polling for new NARs at {}", new Object[]{autoLoadPath});
+                    LOGGER.debug("Polling for new NARs at {}", autoLoadPath);
                     key = watchService.poll(pollIntervalMillis, TimeUnit.MILLISECONDS);
+                    LOGGER.trace("Finished polling for new NARs at {}", autoLoadPath);
                 } catch (InterruptedException x) {
                     LOGGER.info("WatchService interrupted, returning...");
                     return;
                 }
 
-                // Key comes back as null when there are no new create events, but we still want to continue processing
+                final List<File> unloadNars = new ArrayList<>();
+
+                // Key comes back as null when there are no new create events, but we still want to continue processing,
                 // so we can consider files added to the candidateNars list in previous iterations
 
                 if (key != null) {
                     for (WatchEvent<?> event : key.pollEvents()) {
                         final WatchEvent.Kind<?> kind = event.kind();
-                        if (kind == StandardWatchEventKinds.OVERFLOW) {
-                            continue;
+                        LOGGER.info("NAR auto-load directory {}/{} event detected", kind.type(), kind.name());
+                        if ((kind == StandardWatchEventKinds.ENTRY_CREATE) || (kind == StandardWatchEventKinds.ENTRY_DELETE)) {
+                            final WatchEvent<Path> ev = (WatchEvent<Path>) event;
+                            final Path filename = ev.context();
+
+                            final Path autoLoadFile = autoLoadPath.resolve(filename);
+                            final String autoLoadFilename = autoLoadFile.toFile().getName().toLowerCase();
+
+                            if (!autoLoadFilename.endsWith(".nar")) {
+                                LOGGER.info("Skipping non-nar file {}", autoLoadFilename);
+                                continue;
+                            }
+
+                            if (autoLoadFilename.startsWith(".")) {
+                                LOGGER.debug("Skipping partially written file {}", autoLoadFilename);
+                                continue;
+                            }
+
+                            LOGGER.info("Detected {} - {} in NAR auto-load directory", kind.name(), autoLoadFile);
+                            if (kind == StandardWatchEventKinds.ENTRY_DELETE) {
+                                unloadNars.add(autoLoadFile.toFile());
+                            } else {
+                                candidateNars.add(autoLoadFile.toFile());
+                            }
                         }
-
-                        final WatchEvent<Path> ev = (WatchEvent<Path>) event;
-                        final Path filename = ev.context();
-
-                        final Path autoLoadFile = autoLoadPath.resolve(filename);
-                        final String autoLoadFilename = autoLoadFile.toFile().getName().toLowerCase();
-
-                        if (!autoLoadFilename.endsWith(".nar")) {
-                            LOGGER.info("Skipping non-nar file {}", new Object[]{autoLoadFilename});
-                            continue;
-                        }
-
-                        if (autoLoadFilename.startsWith(".")) {
-                            LOGGER.debug("Skipping partially written file {}", new Object[]{autoLoadFilename});
-                            continue;
-                        }
-
-                        LOGGER.info("Found {} in auto-load directory", new Object[]{autoLoadFile});
-                        candidateNars.add(autoLoadFile.toFile());
                     }
 
                     final boolean valid = key.reset();
@@ -106,6 +112,11 @@ public class NarAutoLoaderTask implements Runnable {
                         LOGGER.error("NAR auto-load directory is no longer valid");
                         stop();
                     }
+                }
+
+                // any NARs removed from the autoload folder should be unloaded
+                if (!unloadNars.isEmpty()) {
+                    narLoader.unload(unloadNars);
                 }
 
                 // Make sure that the created file is done being written by checking the last modified date of the file and
@@ -120,7 +131,7 @@ public class NarAutoLoaderTask implements Runnable {
                         readyNars.add(candidateNar);
                         candidateNarIter.remove();
                     } else {
-                        LOGGER.debug("Candidate NAR {} not ready yet, will check again next time", new Object[]{candidateNar.getName()});
+                        LOGGER.debug("Candidate NAR {} not ready yet, will check again next time", candidateNar.getName());
                     }
                 }
 

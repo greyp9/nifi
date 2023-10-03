@@ -26,8 +26,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -378,6 +380,29 @@ public final class NarClassLoaders {
         }
 
         return new NarLoadResult(loadedBundles, skippedBundles);
+    }
+
+    public synchronized NarLoadResult unloadAdditionalNar(final File additionalUnpackedNar) {
+        final Set<Bundle> bundlesUnloaded = new LinkedHashSet<>();
+        final Map<String, Bundle> bundles = initContext.bundles;
+        for (Map.Entry<String, Bundle> entry : bundles.entrySet()) {
+            final Bundle bundle = entry.getValue();
+            final URLClassLoader classLoader = (URLClassLoader) bundle.getClassLoader();
+            final File workingDirectory = bundle.getBundleDetails().getWorkingDirectory();
+            if (workingDirectory.getName().startsWith(additionalUnpackedNar.getName())) {
+                logger.info("Unload additional NAR. ClassLoader {}, path '{}'.", classLoader.getParent(), additionalUnpackedNar.getPath());
+                try {
+                    classLoader.close();
+                    logger.info("Closed classloader {}.", classLoader);
+                    bundlesUnloaded.add(bundle);
+                    bundles.remove(entry.getKey());
+                } catch (IOException e) {
+                    logger.error("Failed to close classloader {}.", classLoader, e);
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+        return new NarLoadResult(bundlesUnloaded, Collections.emptySet());
     }
 
     private ClassLoader createBundleClassLoader(final BundleDetails bundleDetail, final Map<String, Set<BundleCoordinate>> bundleIdToCoordinatesLookup, final boolean logDetails)

@@ -110,6 +110,14 @@ public interface ExtensionManager {
     Bundle getBundle(BundleCoordinate bundleCoordinate);
 
     /**
+     * Retrieves the bundle with the given coordinate.
+     *
+     * @param bundleCoordinate a coordinate to look up
+     * @return the removed bundle, or null if none exists
+     */
+    Bundle removeBundle(final BundleCoordinate bundleCoordinate);
+
+    /**
      * Retrieves the extension classes that were loaded from the bundle with the given coordinate.
      *
      * @param bundleCoordinate the coordinate
