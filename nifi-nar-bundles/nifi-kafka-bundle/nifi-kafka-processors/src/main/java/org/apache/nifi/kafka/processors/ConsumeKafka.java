@@ -45,6 +45,7 @@ import org.apache.nifi.processor.VerifiableProcessor;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.provenance.ProvenanceReporter;
+import org.apache.nifi.util.StringUtils;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -55,6 +56,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.apache.nifi.expression.ExpressionLanguageScope.NONE;
 
@@ -118,6 +120,14 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .required(true)
             .build();
 
+    static final PropertyDescriptor HEADER_NAME_PATTERN = new PropertyDescriptor.Builder()
+            .name("Header Name Pattern")
+            .displayName("Header Name Pattern")
+            .description("Regular Expression Pattern applied to Kafka Record Header Names for selecting Header Values to be written as FlowFile attributes")
+            .addValidator(StandardValidators.REGULAR_EXPRESSION_VALIDATOR)
+            .required(false)
+            .build();
+
     static final Relationship SUCCESS = new Relationship.Builder()
             .name("success")
             .description("FlowFiles containing one or more serialized Kafka Records")
@@ -129,7 +139,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             TOPIC_NAME,
             AUTO_OFFSET_RESET,
             PROCESSING_STRATEGY,
-            HEADER_ENCODING
+            HEADER_ENCODING,
+            HEADER_NAME_PATTERN
     );
 
     private static final Set<Relationship> RELATIONSHIPS = Collections.singleton(SUCCESS);
@@ -139,6 +150,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     private KafkaConsumerService consumerService;
 
     private Charset headerEncoding;
+
+    private Pattern headerNamePattern;
 
     @Override
     public List<PropertyDescriptor> getSupportedPropertyDescriptors() {
@@ -155,6 +168,13 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         final KafkaConnectionService connectionService = context.getProperty(CONNECTION_SERVICE).asControllerService(KafkaConnectionService.class);
         consumerService = connectionService.getConsumerService(new ConsumerConfiguration());
         headerEncoding = Charset.forName(context.getProperty(HEADER_ENCODING).getValue());
+
+        final String headerNamePatternProperty = context.getProperty(HEADER_NAME_PATTERN).getValue();
+        if (StringUtils.isNotBlank(headerNamePatternProperty)) {
+            headerNamePattern = Pattern.compile(headerNamePatternProperty);
+        } else {
+            headerNamePattern = null;
+        }
     }
 
     @OnStopped
@@ -259,9 +279,17 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         attributes.put(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(consumerRecord.getOffset()));
         attributes.put(KafkaFlowFileAttribute.KAFKA_TIMESTAMP, Long.toString(consumerRecord.getTimestamp()));
 
-        for (final RecordHeader header : consumerRecord.getHeaders()) {
-            final String value = new String(header.value(), headerEncoding);
-            attributes.put(header.key(), value);
+        final List<RecordHeader> headers = consumerRecord.getHeaders();
+        attributes.put(KafkaFlowFileAttribute.KAFKA_HEADER_COUNT, Integer.toString(headers.size()));
+
+        if (headerNamePattern != null) {
+            for (final RecordHeader header : headers) {
+                final String name = header.key();
+                if (headerNamePattern.matcher(name).matches()) {
+                    final String value = new String(header.value(), headerEncoding);
+                    attributes.put(name, value);
+                }
+            }
         }
 
         return attributes;
