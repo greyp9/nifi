@@ -46,6 +46,7 @@ import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.provenance.ProvenanceReporter;
 
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -108,6 +109,15 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .expressionLanguageSupported(NONE)
             .build();
 
+    static final PropertyDescriptor HEADER_ENCODING = new PropertyDescriptor.Builder()
+            .name("Header Encoding")
+            .displayName("Header Encoding")
+            .description("Character encoding applied when reading Kafka Record Header values and writing FlowFile attributes")
+            .addValidator(StandardValidators.CHARACTER_SET_VALIDATOR)
+            .defaultValue(StandardCharsets.UTF_8.name())
+            .required(true)
+            .build();
+
     static final Relationship SUCCESS = new Relationship.Builder()
             .name("success")
             .description("FlowFiles containing one or more serialized Kafka Records")
@@ -118,7 +128,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             GROUP_ID,
             TOPIC_NAME,
             AUTO_OFFSET_RESET,
-            PROCESSING_STRATEGY
+            PROCESSING_STRATEGY,
+            HEADER_ENCODING
     );
 
     private static final Set<Relationship> RELATIONSHIPS = Collections.singleton(SUCCESS);
@@ -126,6 +137,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     private static final String TRANSIT_URI_FORMAT = "kafka://%s/%s";
 
     private KafkaConsumerService consumerService;
+
+    private Charset headerEncoding;
 
     @Override
     public List<PropertyDescriptor> getSupportedPropertyDescriptors() {
@@ -141,6 +154,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     public void onScheduled(final ProcessContext context) {
         final KafkaConnectionService connectionService = context.getProperty(CONNECTION_SERVICE).asControllerService(KafkaConnectionService.class);
         consumerService = connectionService.getConsumerService(new ConsumerConfiguration());
+        headerEncoding = Charset.forName(context.getProperty(HEADER_ENCODING).getValue());
     }
 
     @OnStopped
@@ -246,7 +260,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         attributes.put(KafkaFlowFileAttribute.KAFKA_TIMESTAMP, Long.toString(consumerRecord.getTimestamp()));
 
         for (final RecordHeader header : consumerRecord.getHeaders()) {
-            final String value = new String(header.value(), StandardCharsets.UTF_8);
+            final String value = new String(header.value(), headerEncoding);
             attributes.put(header.key(), value);
         }
 
