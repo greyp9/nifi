@@ -337,15 +337,13 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
                 producerService, publishContext, kafkaRecordConverter, flowFile.getAttributes(), flowFile.getSize());
 
         session.read(flowFile, callback);
-/*
         final RecordSummary recordSummary = callback.getRecordSummary();
         final List<String> offsets = recordSummary.getMetadatas().stream()
                 .map(ProducerRecordMetadata::getOffset)
                 .map(l -> Long.toString(l))
                 .collect(Collectors.toList());
-        getLogger().info("NIFI-11259::onTrigger() - {} {} {} [{}]", recordSummary.getSentCount(),
+        getLogger().trace("NIFI-11259::onTrigger() - {} {} {} [{}]", recordSummary.getSentCount(),
                 recordSummary.getAcknowledgedCount(), recordSummary.getFailedCount(), offsets);
-*/
         session.transfer(flowFile, REL_SUCCESS);
     }
 
