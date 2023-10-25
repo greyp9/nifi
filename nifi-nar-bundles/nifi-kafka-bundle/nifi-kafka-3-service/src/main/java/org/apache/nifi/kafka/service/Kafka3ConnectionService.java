@@ -35,6 +35,7 @@ import org.apache.nifi.controller.ConfigurationContext;
 import org.apache.nifi.controller.VerifiableControllerService;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
+import org.apache.nifi.kafka.service.api.common.ServiceConfiguration;
 import org.apache.nifi.kafka.service.api.consumer.ConsumerConfiguration;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
@@ -131,6 +132,27 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             .expressionLanguageSupported(ExpressionLanguageScope.NONE)
             .build();
 
+    public static final PropertyDescriptor METADATA_WAIT_TIME = new PropertyDescriptor.Builder()
+            .name("max.block.ms")
+            .displayName("Max Metadata Wait Time")
+            .description("The amount of time publisher will wait to obtain metadata or wait for the buffer to flush during the 'send' call before failing the "
+                    + "entire 'send' call. Corresponds to Kafka's 'max.block.ms' property")
+            .required(true)
+            .addValidator(StandardValidators.TIME_PERIOD_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
+            .defaultValue("5 sec")
+            .build();
+
+    public static final PropertyDescriptor ACK_WAIT_TIME = new PropertyDescriptor.Builder()
+            .name("ack.wait.time")
+            .displayName("Acknowledgment Wait Time")
+            .description("After sending a message to Kafka, this indicates the amount of time that we are willing to wait for a response from Kafka. "
+                    + "If Kafka does not acknowledge the message within this time period, the FlowFile will be routed to 'failure'.")
+            .addValidator(StandardValidators.TIME_PERIOD_VALIDATOR)
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
+            .required(true)
+            .defaultValue("5 secs")
+            .build();
 
     private static final List<PropertyDescriptor> PROPERTY_DESCRIPTORS = Collections.unmodifiableList(Arrays.asList(
             BOOTSTRAP_SERVERS,
@@ -138,7 +160,9 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             SASL_MECHANISM,
             SASL_USERNAME,
             SASL_PASSWORD,
-            CLIENT_TIMEOUT
+            CLIENT_TIMEOUT,
+            METADATA_WAIT_TIME,
+            ACK_WAIT_TIME
     ));
 
     private static final Duration VERIFY_TIMEOUT = Duration.ofSeconds(2);
@@ -149,11 +173,14 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
 
     private Properties clientProperties;
 
+    private ServiceConfiguration serviceConfiguration;
+
     private Kafka3ConsumerService consumerService;
 
     @OnEnabled
     public void onEnabled(final ConfigurationContext configurationContext) {
         clientProperties = getClientProperties(configurationContext);
+        serviceConfiguration = getServiceConfiguration(configurationContext);
         consumerService = new Kafka3ConsumerService(getLogger(), clientProperties);
     }
 
@@ -184,7 +211,7 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             propertiesProducer.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG,
                     new TransactionIdSupplier(producerConfiguration.getTransactionIdPrefix()).get());
         }
-        return new Kafka3ProducerService(propertiesProducer, producerConfiguration);
+        return new Kafka3ProducerService(propertiesProducer, serviceConfiguration, producerConfiguration);
     }
 
     @Override
@@ -246,7 +273,15 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
         final int requestTimeoutMs = getRequestTimeoutMs(propertyContext);
         properties.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
 
+        final long timePeriod = propertyContext.getProperty(METADATA_WAIT_TIME).asTimePeriod(TimeUnit.MILLISECONDS);
+        properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, timePeriod);
+
         return properties;
+    }
+
+    private ServiceConfiguration getServiceConfiguration(final PropertyContext propertyContext) {
+        final long maxAckWaitMillis = propertyContext.getProperty(ACK_WAIT_TIME).asTimePeriod(TimeUnit.MILLISECONDS);
+        return new ServiceConfiguration(maxAckWaitMillis);
     }
 
     private int getDefaultApiTimeoutMs(final PropertyContext propertyContext) {

@@ -21,6 +21,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.nifi.kafka.service.api.producer.ProducerRecordMetadata;
 import org.apache.nifi.kafka.service.api.producer.RecordSummary;
 import org.apache.nifi.kafka.shared.util.Notifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +30,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 public class ProducerCallback implements Callback {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
+
     private final AtomicLong sentCount;
     private final AtomicLong acknowledgedCount;
     private final AtomicLong failedCount;
@@ -64,9 +68,11 @@ public class ProducerCallback implements Callback {
         return new ProducerRecordMetadata(m.topic(), m.partition(), m.offset(), m.timestamp());
     }
 
-    public RecordSummary waitComplete() {
+    public RecordSummary waitComplete(final long maxAckWaitMillis) {
+        logger.trace("waitComplete():start");
         final Supplier<Boolean> conditionComplete = () -> (acknowledgedCount.get() == sentCount.get());
-        final boolean success = notifier.waitForCondition(conditionComplete, 5000L);
+        final boolean success = notifier.waitForCondition(conditionComplete, maxAckWaitMillis);
+        logger.trace("waitComplete():finish - {}", success);
         return new RecordSummary(success, sentCount.get(), acknowledgedCount.get(), failedCount.get(), metadatas, exceptions);
     }
 }

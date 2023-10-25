@@ -24,11 +24,14 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
+import org.apache.nifi.kafka.service.api.common.ServiceConfiguration;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.kafka.service.api.producer.RecordSummary;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -38,12 +41,18 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 public class Kafka3ProducerService implements KafkaProducerService {
+    private final Logger logger = LoggerFactory.getLogger(getClass());
+
     private final Producer<byte[], byte[]> producer;
+    private final ServiceConfiguration serviceConfiguration;
     private final ProducerConfiguration producerConfiguration;
 
-    public Kafka3ProducerService(final Properties properties, final ProducerConfiguration producerConfiguration) {
+    public Kafka3ProducerService(final Properties properties,
+                                 final ServiceConfiguration serviceConfiguration,
+                                 final ProducerConfiguration producerConfiguration) {
         final ByteArraySerializer serializer = new ByteArraySerializer();
         this.producer = new KafkaProducer<>(properties, serializer, serializer);
+        this.serviceConfiguration = serviceConfiguration;
         this.producerConfiguration = producerConfiguration;
         if (producerConfiguration.getUseTransactions()) {
             producer.initTransactions();
@@ -73,12 +82,15 @@ public class Kafka3ProducerService implements KafkaProducerService {
 
     private RecordSummary sendNoTransaction(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext) {
         final ProducerCallback callback = new ProducerCallback();
+        logger.trace("sendNoTransaction():start");
         while (kafkaRecords.hasNext()) {
             producer.send(toProducerRecord(kafkaRecords.next(), publishContext), callback);
             callback.send();
         }
+        logger.trace("sendNoTransaction():inFlight");
         producer.flush();
-        return callback.waitComplete();
+        logger.trace("sendNoTransaction():flushed");
+        return callback.waitComplete(serviceConfiguration.getMaxAckWaitMillis());
     }
 
     private ProducerRecord<byte[], byte[]> toProducerRecord(final KafkaRecord kafkaRecord, final PublishContext publishContext) {
