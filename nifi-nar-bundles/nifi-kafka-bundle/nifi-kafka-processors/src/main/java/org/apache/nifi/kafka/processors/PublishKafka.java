@@ -38,8 +38,10 @@ import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
+import org.apache.nifi.kafka.service.api.producer.ProducerRecordMetadata;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
+import org.apache.nifi.kafka.service.api.producer.RecordSummary;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.kafka.shared.property.PublishStrategy;
 import org.apache.nifi.kafka.shared.transaction.TransactionIdSupplier;
@@ -71,6 +73,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 @Tags({"kafka", "producer", "record"})
 public class PublishKafka extends AbstractProcessor implements VerifiableProcessor {
@@ -334,6 +337,15 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
                 producerService, publishContext, kafkaRecordConverter, flowFile.getAttributes(), flowFile.getSize());
 
         session.read(flowFile, callback);
+/*
+        final RecordSummary recordSummary = callback.getRecordSummary();
+        final List<String> offsets = recordSummary.getMetadatas().stream()
+                .map(ProducerRecordMetadata::getOffset)
+                .map(l -> Long.toString(l))
+                .collect(Collectors.toList());
+        getLogger().info("NIFI-11259::onTrigger() - {} {} {} [{}]", recordSummary.getSentCount(),
+                recordSummary.getAcknowledgedCount(), recordSummary.getFailedCount(), offsets);
+*/
         session.transfer(flowFile, REL_SUCCESS);
     }
 
@@ -369,6 +381,8 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         private final Map<String, String> attributes;
         private final long inputLength;
 
+        private RecordSummary recordSummary;
+
         public PublishCallback(
                 final KafkaProducerService producerService,
                 final PublishContext publishContext,
@@ -382,11 +396,15 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
             this.inputLength = inputLength;
         }
 
+        public RecordSummary getRecordSummary() {
+            return recordSummary;
+        }
+
         @Override
         public void process(final InputStream in) throws IOException {
             try (final InputStream is = new BufferedInputStream(in)) {
                 final Iterator<KafkaRecord> records = kafkaConverter.convert(attributes, is, inputLength);
-                producerService.send(records, publishContext);
+                recordSummary = producerService.send(records, publishContext);
             }
         }
     }
