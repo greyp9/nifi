@@ -28,8 +28,9 @@ import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
-import org.apache.nifi.kafka.service.api.record.RecordSummary;
+import org.apache.nifi.kafka.service.api.producer.RecordSummary;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -67,15 +68,17 @@ public class Kafka3ProducerService implements KafkaProducerService {
         } catch (final Exception e) {
             producer.abortTransaction();
         }
-        return new RecordSummary();
+        return new RecordSummary(false, 0L, 0L, 0L, new ArrayList<>(), new ArrayList<>());
     }
 
     private RecordSummary sendNoTransaction(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext) {
+        final ProducerCallback callback = new ProducerCallback();
         while (kafkaRecords.hasNext()) {
-            final KafkaRecord kafkaRecord = kafkaRecords.next();
-            producer.send(toProducerRecord(kafkaRecord, publishContext));
+            producer.send(toProducerRecord(kafkaRecords.next(), publishContext), callback);
+            callback.send();
         }
-        return new RecordSummary();
+        producer.flush();
+        return callback.waitComplete();
     }
 
     private ProducerRecord<byte[], byte[]> toProducerRecord(final KafkaRecord kafkaRecord, final PublishContext publishContext) {
