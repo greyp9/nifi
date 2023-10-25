@@ -28,13 +28,14 @@ public class Notifier {
         this.object = new Object();
     }
 
-    public boolean waitForCondition(final Supplier<Boolean> condition, final long timeout) {
+    public boolean waitForCondition(final Supplier<Boolean> conditionComplete, final long timeout) {
         boolean isInterrupted = false;
         final long millisTimeout = System.currentTimeMillis() + timeout;
-        while (!condition.get() && !isInterrupted) {
+        final Supplier<Boolean> conditionTimeout = () -> (System.currentTimeMillis() >= millisTimeout);
+        while (!conditionComplete.get() && !conditionTimeout.get() && !isInterrupted) {
             isInterrupted = waitUntil(millisTimeout);
         }
-        return condition.get();
+        return conditionComplete.get();
     }
 
     private boolean waitUntil(final long millisTimeout) {
