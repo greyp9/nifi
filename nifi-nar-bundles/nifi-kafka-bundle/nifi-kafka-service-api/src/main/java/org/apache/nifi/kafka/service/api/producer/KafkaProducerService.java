@@ -17,7 +17,6 @@
 package org.apache.nifi.kafka.service.api.producer;
 
 import org.apache.nifi.kafka.service.api.common.PartitionState;
-import org.apache.nifi.kafka.service.api.record.RecordSummary;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 
 import java.util.Iterator;
