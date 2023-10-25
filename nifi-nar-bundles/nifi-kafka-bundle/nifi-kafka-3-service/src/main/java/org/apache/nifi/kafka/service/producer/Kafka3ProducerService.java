@@ -28,12 +28,11 @@ import org.apache.nifi.kafka.service.api.common.ServiceConfiguration;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
-import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.kafka.service.api.producer.RecordSummary;
+import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -67,17 +66,23 @@ public class Kafka3ProducerService implements KafkaProducerService {
     }
 
     private RecordSummary sendTransaction(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext) {
+        final ProducerCallback callback = new ProducerCallback();
         try {
             producer.beginTransaction();
+            logger.trace("sendTransaction():begin");
             while (kafkaRecords.hasNext()) {
-                final KafkaRecord kafkaRecord = kafkaRecords.next();
-                producer.send(toProducerRecord(kafkaRecord, publishContext));
+                producer.send(toProducerRecord(kafkaRecords.next(), publishContext), callback);
+                callback.send();
             }
+            logger.trace("sendTransaction():inFlight");
+            producer.flush();
             producer.commitTransaction();
+            logger.trace("sendTransaction():committed");
         } catch (final Exception e) {
             producer.abortTransaction();
+            logger.trace("sendTransaction():aborted");
         }
-        return new RecordSummary(false, 0L, 0L, 0L, new ArrayList<>(), new ArrayList<>());
+        return callback.waitComplete(serviceConfiguration.getMaxAckWaitMillis());
     }
 
     private RecordSummary sendNoTransaction(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext) {
