@@ -29,6 +29,7 @@ import org.apache.nifi.annotation.lifecycle.OnDisabled;
 import org.apache.nifi.annotation.lifecycle.OnEnabled;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.PropertyValue;
 import org.apache.nifi.context.PropertyContext;
 import org.apache.nifi.controller.AbstractControllerService;
 import org.apache.nifi.controller.ConfigurationContext;
@@ -46,6 +47,7 @@ import org.apache.nifi.kafka.shared.property.SaslMechanism;
 import org.apache.nifi.kafka.shared.transaction.TransactionIdSupplier;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.util.StandardValidators;
+import org.apache.nifi.ssl.SSLContextService;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -59,6 +61,13 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.nifi.components.ConfigVerificationResult.Outcome.FAILED;
 import static org.apache.nifi.components.ConfigVerificationResult.Outcome.SUCCESSFUL;
+import static org.apache.nifi.kafka.shared.property.KafkaClientProperty.SSL_KEYSTORE_LOCATION;
+import static org.apache.nifi.kafka.shared.property.KafkaClientProperty.SSL_KEYSTORE_PASSWORD;
+import static org.apache.nifi.kafka.shared.property.KafkaClientProperty.SSL_KEYSTORE_TYPE;
+import static org.apache.nifi.kafka.shared.property.KafkaClientProperty.SSL_KEY_PASSWORD;
+import static org.apache.nifi.kafka.shared.property.KafkaClientProperty.SSL_TRUSTSTORE_LOCATION;
+import static org.apache.nifi.kafka.shared.property.KafkaClientProperty.SSL_TRUSTSTORE_PASSWORD;
+import static org.apache.nifi.kafka.shared.property.KafkaClientProperty.SSL_TRUSTSTORE_TYPE;
 
 public class Kafka3ConnectionService extends AbstractControllerService implements KafkaConnectionService, VerifiableControllerService {
 
@@ -122,6 +131,14 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             )
             .build();
 
+    public static final PropertyDescriptor SSL_CONTEXT_SERVICE = new PropertyDescriptor.Builder()
+            .name("ssl.context.service")
+            .displayName("SSL Context Service")
+            .description("Service supporting SSL communication with Kafka brokers")
+            .required(false)
+            .identifiesControllerService(SSLContextService.class)
+            .build();
+
     public static final PropertyDescriptor CLIENT_TIMEOUT = new PropertyDescriptor.Builder()
             .name("default.api.timeout.ms")
             .displayName("Client Timeout")
@@ -160,6 +177,7 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             SASL_MECHANISM,
             SASL_USERNAME,
             SASL_PASSWORD,
+            SSL_CONTEXT_SERVICE,
             CLIENT_TIMEOUT,
             METADATA_WAIT_TIME,
             ACK_WAIT_TIME
@@ -267,6 +285,8 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
                     PlainLoginModule.class.getName(), saslUsername, saslPassword));
         }
 
+        setSslProperties(properties, propertyContext);
+
         final int defaultApiTimeoutMs = getDefaultApiTimeoutMs(propertyContext);
         properties.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs);
 
@@ -277,6 +297,29 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
         properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, timePeriod);
 
         return properties;
+    }
+
+    private void setSslProperties(final Properties properties, final PropertyContext context) {
+        final PropertyValue sslContextServiceProperty = context.getProperty(SSL_CONTEXT_SERVICE);
+        if (sslContextServiceProperty.isSet()) {
+            final SSLContextService sslContextService = sslContextServiceProperty.asControllerService(SSLContextService.class);
+            if (sslContextService.isKeyStoreConfigured()) {
+                properties.put(SSL_KEYSTORE_LOCATION.getProperty(), sslContextService.getKeyStoreFile());
+                properties.put(SSL_KEYSTORE_TYPE.getProperty(), sslContextService.getKeyStoreType());
+
+                final String keyStorePassword = sslContextService.getKeyStorePassword();
+                properties.put(SSL_KEYSTORE_PASSWORD.getProperty(), keyStorePassword);
+
+                final String keyPassword = sslContextService.getKeyPassword();
+                final String configuredKeyPassword = keyPassword == null ? keyStorePassword : keyPassword;
+                properties.put(SSL_KEY_PASSWORD.getProperty(), configuredKeyPassword);
+            }
+            if (sslContextService.isTrustStoreConfigured()) {
+                properties.put(SSL_TRUSTSTORE_LOCATION.getProperty(), sslContextService.getTrustStoreFile());
+                properties.put(SSL_TRUSTSTORE_TYPE.getProperty(), sslContextService.getTrustStoreType());
+                properties.put(SSL_TRUSTSTORE_PASSWORD.getProperty(), sslContextService.getTrustStorePassword());
+            }
+        }
     }
 
     private ServiceConfiguration getServiceConfiguration(final PropertyContext propertyContext) {
