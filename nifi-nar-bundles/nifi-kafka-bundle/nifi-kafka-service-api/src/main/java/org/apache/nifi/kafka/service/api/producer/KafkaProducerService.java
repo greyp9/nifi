@@ -19,12 +19,15 @@ package org.apache.nifi.kafka.service.api.producer;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 
+import java.io.Closeable;
 import java.util.Iterator;
 import java.util.List;
 
-public interface KafkaProducerService {
+public interface KafkaProducerService extends Closeable {
 
     RecordSummary send(Iterator<KafkaRecord> records, PublishContext publishContext);
+
+    void close();
 
     List<PartitionState> getPartitionStates(String topic);
 }

@@ -301,8 +301,17 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         final boolean useTransactions = context.getProperty(USE_TRANSACTIONS).asBoolean();
         final String transactionalIdPrefix = context.getProperty(TRANSACTIONAL_ID_PREFIX).evaluateAttributeExpressions().getValue();
         final ProducerConfiguration producerConfiguration = new ProducerConfiguration(useTransactions, transactionalIdPrefix);
-        final KafkaProducerService producerService = connectionService.getProducerService(producerConfiguration);
 
+        try (final KafkaProducerService producerService = connectionService.getProducerService(producerConfiguration)) {
+            publishFlowFile(context, session, flowFile, producerService);
+        } catch (final Throwable e) {
+            getLogger().error(e.getMessage(), e);
+            context.yield();
+        }
+    }
+
+    private void publishFlowFile(final ProcessContext context, final ProcessSession session,
+                                 final FlowFile flowFile, final KafkaProducerService producerService) {
         final RecordReaderFactory readerFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
         final RecordSetWriterFactory writerFactory = context.getProperty(RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
         final RecordSetWriterFactory keyWriterFactory = context.getProperty(RECORD_KEY_WRITER).asControllerService(RecordSetWriterFactory.class);
