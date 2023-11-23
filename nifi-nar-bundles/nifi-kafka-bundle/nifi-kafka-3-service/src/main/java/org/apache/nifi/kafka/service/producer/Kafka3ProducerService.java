@@ -53,13 +53,18 @@ public class Kafka3ProducerService implements KafkaProducerService {
         this.producer = new KafkaProducer<>(properties, serializer, serializer);
         this.serviceConfiguration = serviceConfiguration;
         this.producerConfiguration = producerConfiguration;
-        if (producerConfiguration.getUseTransactions()) {
-            producer.initTransactions();
-        }
+    }
+
+    @Override
+    public void close() {
+        producer.close();
     }
 
     @Override
     public RecordSummary send(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext) {
+        if (producerConfiguration.getUseTransactions()) {
+            producer.initTransactions();
+        }
         return producerConfiguration.getUseTransactions()
                 ? sendTransaction(kafkaRecords, publishContext)
                 : sendNoTransaction(kafkaRecords, publishContext);
