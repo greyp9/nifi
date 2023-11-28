@@ -18,6 +18,7 @@ package org.apache.nifi.kafka.service.producer;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.service.api.producer.ProducerRecordMetadata;
 import org.apache.nifi.kafka.service.api.producer.RecordSummary;
 import org.apache.nifi.kafka.shared.util.Notifier;
@@ -35,6 +36,7 @@ public class ProducerCallback implements Callback {
     private final AtomicLong sentCount;
     private final AtomicLong acknowledgedCount;
     private final AtomicLong failedCount;
+    private final List<FlowFile> flowFiles;
     private final List<ProducerRecordMetadata> metadatas;
     private final List<Exception> exceptions;
     private final Notifier notifier;
@@ -43,17 +45,24 @@ public class ProducerCallback implements Callback {
         this.sentCount = new AtomicLong(0L);
         this.acknowledgedCount = new AtomicLong(0L);
         this.failedCount = new AtomicLong(0L);
+        this.flowFiles = new ArrayList<>();
         this.metadatas = new ArrayList<>();
         this.exceptions = new ArrayList<>();
         this.notifier = new Notifier();
     }
 
-    public long send() {
+    public long send(final FlowFile flowFile) {
+        // the source `FlowFile` and the associated `RecordMetadata` need to somehow be associated...
+
+        flowFiles.add(flowFile);
         return sentCount.incrementAndGet();
     }
 
     @Override
     public void onCompletion(final RecordMetadata metadata, final Exception exception) {
+
+        // the source `FlowFile` and the associated `RecordMetadata` need to somehow be associated...
+
         if (exception == null) {
             acknowledgedCount.addAndGet(1L);
             metadatas.add(toProducerRecordMetadata(metadata));
@@ -73,6 +82,7 @@ public class ProducerCallback implements Callback {
         final Supplier<Boolean> conditionComplete = () -> (acknowledgedCount.get() == sentCount.get());
         final boolean success = notifier.waitForCondition(conditionComplete, maxAckWaitMillis);
         logger.trace("waitComplete():finish - {}", success);
-        return new RecordSummary(success, sentCount.get(), acknowledgedCount.get(), failedCount.get(), metadatas, exceptions);
+        return new RecordSummary(success, sentCount.get(), acknowledgedCount.get(), failedCount.get(),
+                flowFiles, metadatas, exceptions);
     }
 }

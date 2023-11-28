@@ -16,6 +16,8 @@
  */
 package org.apache.nifi.kafka.service.api.producer;
 
+import org.apache.nifi.flowfile.FlowFile;
+
 import java.util.List;
 
 public class RecordSummary {
@@ -24,15 +26,17 @@ public class RecordSummary {
     private final long acknowledgedCount;
     private final long failedCount;
 
+    private final List<FlowFile> flowFiles;
     private final List<ProducerRecordMetadata> metadatas;
     private final List<Exception> exceptions;
 
-    public RecordSummary(boolean success, long sentCount, long acknowledgedCount, long failedCount,
-                         List<ProducerRecordMetadata> metadatas, List<Exception> exceptions) {
+    public RecordSummary(final boolean success, final long sentCount, final long acknowledgedCount, final long failedCount,
+                         final List<FlowFile> flowFiles, final List<ProducerRecordMetadata> metadatas, final List<Exception> exceptions) {
         this.success = success;
         this.sentCount = sentCount;
         this.acknowledgedCount = acknowledgedCount;
         this.failedCount = failedCount;
+        this.flowFiles = flowFiles;
         this.metadatas = metadatas;
         this.exceptions = exceptions;
     }
@@ -51,6 +55,10 @@ public class RecordSummary {
 
     public long getFailedCount() {
         return failedCount;
+    }
+
+    public List<FlowFile> getFlowFiles() {
+        return flowFiles;
     }
 
     public List<ProducerRecordMetadata> getMetadatas() {

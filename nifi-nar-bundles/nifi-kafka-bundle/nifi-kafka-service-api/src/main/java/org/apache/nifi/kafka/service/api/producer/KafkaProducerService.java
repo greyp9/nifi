@@ -25,7 +25,25 @@ import java.util.List;
 
 public interface KafkaProducerService extends Closeable {
 
-    RecordSummary send(Iterator<KafkaRecord> records, PublishContext publishContext);
+    /**
+     * Initialize the Kafka `Producer` for the publish API call sequence.  This has significance in the case of
+     * transactional publish activity.
+     */
+    void init();
+
+    /**
+     * Send the record(s) associated with a single FlowFile.
+     *
+     * @param records        the NiFi representation of the Kafka records to be published
+     * @param publishContext the NiFi context associated with the publish attempt
+     */
+    void send(Iterator<KafkaRecord> records, PublishContext publishContext);
+
+    /**
+     * Signal the Kafka `Producer` to carry out publishing of the message(s).  This has significance in the case of
+     * transactional publish activity.
+     */
+    RecordSummary complete();
 
     void close();
 

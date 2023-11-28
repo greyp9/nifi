@@ -22,6 +22,7 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.PropertyValue;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.kafka.processors.producer.common.PublishKafkaUtil;
 import org.apache.nifi.kafka.processors.producer.convert.DelimitedStreamKafkaRecordConverter;
 import org.apache.nifi.kafka.processors.producer.convert.FlowFileStreamKafkaRecordConverter;
 import org.apache.nifi.kafka.processors.producer.convert.KafkaRecordConverter;
@@ -40,8 +41,8 @@ import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.api.producer.ProducerRecordMetadata;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
-import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.kafka.service.api.producer.RecordSummary;
+import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.kafka.shared.property.PublishStrategy;
 import org.apache.nifi.kafka.shared.transaction.TransactionIdSupplier;
@@ -78,7 +79,7 @@ import java.util.stream.Collectors;
 @Tags({"kafka", "producer", "record"})
 public class PublishKafka extends AbstractProcessor implements VerifiableProcessor {
 
-    static final PropertyDescriptor CONNECTION_SERVICE = new PropertyDescriptor.Builder()
+    public static final PropertyDescriptor CONNECTION_SERVICE = new PropertyDescriptor.Builder()
             .name("Kafka Connection Service")
             .displayName("Kafka Connection Service")
             .description("Provides connections to Kafka Broker for publishing Kafka Records")
@@ -87,7 +88,7 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
             .required(true)
             .build();
 
-    static final PropertyDescriptor TOPIC_NAME = new PropertyDescriptor.Builder()
+    public static final PropertyDescriptor TOPIC_NAME = new PropertyDescriptor.Builder()
             .name("Topic Name")
             .displayName("Topic Name")
             .description("Name of the Kafka Topic to which the Processor publishes Kafka Records")
@@ -186,7 +187,7 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
             .required(false)
             .build();
 
-    static final PropertyDescriptor USE_TRANSACTIONS = new PropertyDescriptor.Builder()
+    public static final PropertyDescriptor USE_TRANSACTIONS = new PropertyDescriptor.Builder()
             .name("use-transactions")
             .displayName("Use Transactions")
             .description("Specifies whether or not NiFi should provide Transactional guarantees when communicating with Kafka. If there is a problem sending data to Kafka, "
@@ -271,12 +272,12 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         return DESCRIPTORS;
     }
 
-    static final Relationship REL_SUCCESS = new Relationship.Builder()
+    public static final Relationship REL_SUCCESS = new Relationship.Builder()
             .name("success")
             .description("FlowFiles for which all content was sent to Kafka.")
             .build();
 
-    static final Relationship REL_FAILURE = new Relationship.Builder()
+    public static final Relationship REL_FAILURE = new Relationship.Builder()
             .name("failure")
             .description("Any FlowFile that cannot be sent to Kafka will be routed to this Relationship")
             .build();
@@ -291,8 +292,8 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
 
     @Override
     public void onTrigger(final ProcessContext context, final ProcessSession session) throws ProcessException {
-        final FlowFile flowFile = session.get();
-        if (flowFile == null) {
+        final List<FlowFile> flowFiles = PublishKafkaUtil.pollFlowFiles(session);
+        if (flowFiles.isEmpty()) {
             return;
         }
 
@@ -303,10 +304,28 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         final ProducerConfiguration producerConfiguration = new ProducerConfiguration(useTransactions, transactionalIdPrefix);
 
         try (final KafkaProducerService producerService = connectionService.getProducerService(producerConfiguration)) {
-            publishFlowFile(context, session, flowFile, producerService);
+            publishFlowFiles(context, session, flowFiles, producerService);
         } catch (final Throwable e) {
             getLogger().error(e.getMessage(), e);
             context.yield();
+        }
+    }
+
+    private void publishFlowFiles(final ProcessContext context, final ProcessSession session,
+                                  final List<FlowFile> flowFiles, final KafkaProducerService producerService) {
+        producerService.init();
+        for (final FlowFile flowFile : flowFiles) {
+            publishFlowFile(context, session, flowFile, producerService);
+        }
+        final RecordSummary recordSummary = producerService.complete();
+        final List<String> offsets = recordSummary.getMetadatas().stream()
+                .map(ProducerRecordMetadata::getOffset)
+                .map(l -> Long.toString(l))
+                .collect(Collectors.toList());
+        getLogger().trace("NIFI-11259::onTrigger() - {} {} {} [{}] [{}]", recordSummary.getSentCount(),
+                recordSummary.getAcknowledgedCount(), recordSummary.getFailedCount(), offsets, recordSummary.getExceptions());
+        for (final FlowFile flowFile : recordSummary.getFlowFiles()) {
+            session.transfer(flowFile, REL_SUCCESS);
         }
     }
 
@@ -318,7 +337,7 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
 
         final String topic = context.getProperty(TOPIC_NAME).evaluateAttributeExpressions(flowFile.getAttributes()).getValue();
         final Integer partition = context.getProperty(PARTITION).evaluateAttributeExpressions(flowFile.getAttributes()).asInteger();
-        final PublishContext publishContext = new PublishContext(topic, partition, null);
+        final PublishContext publishContext = new PublishContext(topic, partition, null, flowFile);
 
         final PropertyValue propertyDemarcator = context.getProperty(MESSAGE_DEMARCATOR);
         final int maxMessageSize = context.getProperty(MAX_REQUEST_SIZE).asDataSize(DataUnit.B).intValue();
@@ -346,14 +365,6 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
                 producerService, publishContext, kafkaRecordConverter, flowFile.getAttributes(), flowFile.getSize());
 
         session.read(flowFile, callback);
-        final RecordSummary recordSummary = callback.getRecordSummary();
-        final List<String> offsets = recordSummary.getMetadatas().stream()
-                .map(ProducerRecordMetadata::getOffset)
-                .map(l -> Long.toString(l))
-                .collect(Collectors.toList());
-        getLogger().trace("NIFI-11259::onTrigger() - {} {} {} [{}]", recordSummary.getSentCount(),
-                recordSummary.getAcknowledgedCount(), recordSummary.getFailedCount(), offsets);
-        session.transfer(flowFile, REL_SUCCESS);
     }
 
     private KafkaRecordConverter getKafkaRecordConverterFor(
@@ -388,8 +399,6 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         private final Map<String, String> attributes;
         private final long inputLength;
 
-        private RecordSummary recordSummary;
-
         public PublishCallback(
                 final KafkaProducerService producerService,
                 final PublishContext publishContext,
@@ -403,15 +412,11 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
             this.inputLength = inputLength;
         }
 
-        public RecordSummary getRecordSummary() {
-            return recordSummary;
-        }
-
         @Override
         public void process(final InputStream in) throws IOException {
             try (final InputStream is = new BufferedInputStream(in)) {
                 final Iterator<KafkaRecord> records = kafkaConverter.convert(attributes, is, inputLength);
-                recordSummary = producerService.send(records, publishContext);
+                producerService.send(records, publishContext);
             }
         }
     }
