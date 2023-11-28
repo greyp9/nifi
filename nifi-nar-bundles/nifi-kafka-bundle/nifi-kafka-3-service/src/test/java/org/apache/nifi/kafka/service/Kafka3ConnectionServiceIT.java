@@ -127,7 +127,9 @@ public class Kafka3ConnectionServiceIT {
         final KafkaProducerService producerService = service.getProducerService(producerConfiguration);
         final KafkaRecord kafkaRecord = new KafkaRecord(null, null, null, null, RECORD_VALUE, Collections.emptyList());
         final List<KafkaRecord> kafkaRecords = Collections.singletonList(kafkaRecord);
-        final RecordSummary summary = producerService.send(kafkaRecords.iterator(), new PublishContext(TOPIC + "-produce", null, null));
+        producerService.init();
+        producerService.send(kafkaRecords.iterator(), new PublishContext(TOPIC + "-produce", null, null, null));
+        final RecordSummary summary = producerService.complete();
         assertNotNull(summary);
     }
 
@@ -138,7 +140,9 @@ public class Kafka3ConnectionServiceIT {
         final KafkaProducerService producerService = service.getProducerService(producerConfiguration);
         final KafkaRecord kafkaRecord = new KafkaRecord(null, null, null, null, RECORD_VALUE, Collections.emptyList());
         final List<KafkaRecord> kafkaRecords = Collections.singletonList(kafkaRecord);
-        final RecordSummary summary = producerService.send(kafkaRecords.iterator(), new PublishContext(TOPIC + "-produce", null, null));
+        producerService.init();
+        producerService.send(kafkaRecords.iterator(), new PublishContext(TOPIC + "-produce", null, null, null));
+        final RecordSummary summary = producerService.complete();
         assertNotNull(summary);
     }
 
@@ -152,7 +156,9 @@ public class Kafka3ConnectionServiceIT {
         final long timestamp = System.currentTimeMillis();
         final KafkaRecord kafkaRecord = new KafkaRecord(null, null, timestamp, RECORD_KEY, RECORD_VALUE, Collections.emptyList());
         final List<KafkaRecord> kafkaRecords = Collections.singletonList(kafkaRecord);
-        final RecordSummary summary = producerService.send(kafkaRecords.iterator(), new PublishContext(TOPIC, null, null));
+        producerService.init();
+        producerService.send(kafkaRecords.iterator(), new PublishContext(TOPIC, null, null, null));
+        final RecordSummary summary = producerService.complete();
         assertNotNull(summary);
 
         try (KafkaConsumerService consumerService = service.getConsumerService(null)) {
