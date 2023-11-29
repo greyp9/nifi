@@ -27,10 +27,15 @@ import org.apache.nifi.ssl.StandardRestrictedSSLContextService;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
+
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 /**
  * Quick integration test for testing against Kafka cluster defined via
@@ -46,21 +51,82 @@ public class PublishKafkaMultipleFFIT {
     private static final String KEYSTORE_PASSWORD = "";
     private static final String TRUSTSTORE_PASSWORD = "";
 
-    @Test
+    public static Stream<Arguments> argumentsTransactionality() {
+        return Stream.of(
+                arguments(Boolean.FALSE),
+                arguments(Boolean.TRUE));
+    }
+
+    @ParameterizedTest
+    @MethodSource("argumentsTransactionality")
     @Disabled("use this to test publish of multiple FlowFiles; requires running Kafka cluster")
-    public void testKafkaMultipleFlowFiles() throws InitializationException {
+    public void testKafkaMultipleFlowFilesSuccess(final Boolean transactionality) throws InitializationException {
         final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
         runner.setValidateExpressionUsage(false);
         runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
         runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
-        //runner.setProperty(PublishKafka.USE_TRANSACTIONS, Boolean.FALSE.toString());
+        runner.setProperty(PublishKafka.USE_TRANSACTIONS, transactionality.toString());
 
-        final String[] suffixes = { "-A", "-B", "-C", "-D", "-E" };
+        final String[] suffixes = { "-A", "-B", "-C" };
         for (String suffix : suffixes) {
             runner.enqueue(TEST_RECORD_VALUE + suffix);
         }
         runner.run();
         runner.assertAllFlowFilesTransferred(PublishKafka.REL_SUCCESS, suffixes.length);
+    }
+
+    /**
+     * Test NiFi processor failure on attempt to send over-sized Kafka record (NiFi limited).
+     */
+    @ParameterizedTest
+    @MethodSource("argumentsTransactionality")
+    @Disabled("use this to test partial publish failure; requires running Kafka cluster")
+    public void testNiFiFailureTooBig(final Boolean transactionality) throws InitializationException {
+        final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
+        runner.setValidateExpressionUsage(false);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
+        runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
+        runner.setProperty(PublishKafka.USE_TRANSACTIONS, transactionality.toString());
+
+        runner.enqueue(new byte[1024 * 1280]);  // by default, NiFi maximum is 1MB per record
+        runner.run();
+        runner.assertAllFlowFilesTransferred(PublishKafka.REL_FAILURE, 1);
+    }
+
+    /**
+     * Test Kafka client library failure on attempt to send over-sized Kafka record (Kafka limited).
+     */
+    @ParameterizedTest
+    @MethodSource("argumentsTransactionality")
+    @Disabled("use this to test partial publish failure; requires running Kafka cluster")
+    public void testKafkaFailureTooBig(final Boolean transactionality) throws InitializationException {
+        final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
+        runner.setValidateExpressionUsage(false);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
+        runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
+        runner.setProperty(PublishKafka.USE_TRANSACTIONS, transactionality.toString());
+        runner.setProperty(PublishKafka.MAX_REQUEST_SIZE, "2 MB");
+
+        runner.enqueue(new byte[1024 * 1280]);  // by default, Kafka maximum is 1MB per record
+        runner.run();
+        runner.assertAllFlowFilesTransferred(PublishKafka.REL_FAILURE, 1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("argumentsTransactionality")
+    @Disabled("use this to test partial publish failure; requires running Kafka cluster")
+    public void testKafkaMultipleFlowFilesPartialFailure(final Boolean transactionality) throws InitializationException {
+        final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
+        runner.setValidateExpressionUsage(false);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
+        runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
+        runner.setProperty(PublishKafka.USE_TRANSACTIONS, transactionality.toString());
+
+        runner.enqueue(TEST_RECORD_VALUE);
+        runner.enqueue(new byte[1024 * 1280]);  // by default, max 1MB per record
+        runner.run(2);
+        runner.assertTransferCount(PublishKafka.REL_SUCCESS, 1);
+        runner.assertTransferCount(PublishKafka.REL_FAILURE, 1);
     }
 
     private String addKafkaConnectionService(final TestRunner runner) throws InitializationException {

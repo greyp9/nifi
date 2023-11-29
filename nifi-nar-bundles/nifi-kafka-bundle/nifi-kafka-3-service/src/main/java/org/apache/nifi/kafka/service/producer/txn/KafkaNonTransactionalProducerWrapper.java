@@ -17,12 +17,11 @@
 package org.apache.nifi.kafka.service.producer.txn;
 
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.nifi.kafka.service.producer.ProducerCallback;
 
 public class KafkaNonTransactionalProducerWrapper extends KafkaProducerWrapper {
 
-    public KafkaNonTransactionalProducerWrapper(final Producer<byte[], byte[]> producer, final ProducerCallback callback) {
-        super(producer, callback);
+    public KafkaNonTransactionalProducerWrapper(final Producer<byte[], byte[]> producer) {
+        super(producer);
     }
 
     @Override
