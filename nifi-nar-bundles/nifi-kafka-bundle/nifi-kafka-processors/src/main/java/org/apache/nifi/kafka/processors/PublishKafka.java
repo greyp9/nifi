@@ -37,6 +37,7 @@ import org.apache.nifi.kafka.processors.producer.key.MessageKeyFactory;
 import org.apache.nifi.kafka.processors.producer.wrapper.RecordMetadataStrategy;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
+import org.apache.nifi.kafka.service.api.producer.FlowFileResult;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.api.producer.ProducerRecordMetadata;
@@ -144,7 +145,7 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
                     + "To enter special character such as 'new line' use CTRL+Enter or Shift+Enter, depending on your OS.")
             .build();
 
-    static final PropertyDescriptor MAX_REQUEST_SIZE = new PropertyDescriptor.Builder()
+    public static final PropertyDescriptor MAX_REQUEST_SIZE = new PropertyDescriptor.Builder()
             .name("max.request.size")
             .displayName("Max Request Size")
             .description("The maximum size of a request in bytes. Corresponds to Kafka's 'max.request.size' property and defaults to 1 MB (1048576).")
@@ -313,19 +314,22 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
 
     private void publishFlowFiles(final ProcessContext context, final ProcessSession session,
                                   final List<FlowFile> flowFiles, final KafkaProducerService producerService) {
+        // transmit data to Kafka; receive results
         producerService.init();
         for (final FlowFile flowFile : flowFiles) {
             publishFlowFile(context, session, flowFile, producerService);
         }
         final RecordSummary recordSummary = producerService.complete();
-        final List<String> offsets = recordSummary.getMetadatas().stream()
-                .map(ProducerRecordMetadata::getOffset)
-                .map(l -> Long.toString(l))
-                .collect(Collectors.toList());
-        getLogger().trace("NIFI-11259::onTrigger() - {} {} {} [{}] [{}]", recordSummary.getSentCount(),
-                recordSummary.getAcknowledgedCount(), recordSummary.getFailedCount(), offsets, recordSummary.getExceptions());
-        for (final FlowFile flowFile : recordSummary.getFlowFiles()) {
-            session.transfer(flowFile, REL_SUCCESS);
+        // process results
+        final List<FlowFileResult> flowFileResults = recordSummary.getFlowFileResults();
+        for (final FlowFileResult flowFileResult : flowFileResults) {
+            final List<String> offsets = flowFileResult.getMetadatas().stream()
+                    .map(ProducerRecordMetadata::getOffset)
+                    .map(l -> Long.toString(l))
+                    .collect(Collectors.toList());
+            getLogger().trace("NIFI-11259::onTrigger() - {} [{}] [{}]", flowFileResult.getSentCount(), offsets, flowFileResult.getExceptions());
+            final Relationship relationship = flowFileResult.getExceptions().isEmpty() ? REL_SUCCESS : REL_FAILURE;
+            session.transfer(flowFileResult.getFlowFile(), relationship);
         }
     }
 
@@ -363,7 +367,6 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
                 keyFactory, headersFactory, propertyDemarcator, flowFile, maxMessageSize);
         final PublishCallback callback = new PublishCallback(
                 producerService, publishContext, kafkaRecordConverter, flowFile.getAttributes(), flowFile.getSize());
-
         session.read(flowFile, callback);
     }
 
@@ -413,10 +416,13 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
         }
 
         @Override
-        public void process(final InputStream in) throws IOException {
+        public void process(final InputStream in) {
             try (final InputStream is = new BufferedInputStream(in)) {
                 final Iterator<KafkaRecord> records = kafkaConverter.convert(attributes, is, inputLength);
                 producerService.send(records, publishContext);
+            } catch (IOException e) {
+                publishContext.setException(e);  // on data pre-process failure, indicate this to controller service
+                producerService.send(Collections.emptyIterator(), publishContext);
             }
         }
     }
