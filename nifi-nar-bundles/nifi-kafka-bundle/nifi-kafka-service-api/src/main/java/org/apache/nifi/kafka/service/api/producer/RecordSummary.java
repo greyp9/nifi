@@ -16,56 +16,21 @@
  */
 package org.apache.nifi.kafka.service.api.producer;
 
-import org.apache.nifi.flowfile.FlowFile;
-
+import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Controller service API container for wrapping results of publishing 1..n FlowFiles to Kafka.
+ */
 public class RecordSummary {
-    private final boolean success;
-    private final long sentCount;
-    private final long acknowledgedCount;
-    private final long failedCount;
 
-    private final List<FlowFile> flowFiles;
-    private final List<ProducerRecordMetadata> metadatas;
-    private final List<Exception> exceptions;
+    private final List<FlowFileResult> flowFileResults;
 
-    public RecordSummary(final boolean success, final long sentCount, final long acknowledgedCount, final long failedCount,
-                         final List<FlowFile> flowFiles, final List<ProducerRecordMetadata> metadatas, final List<Exception> exceptions) {
-        this.success = success;
-        this.sentCount = sentCount;
-        this.acknowledgedCount = acknowledgedCount;
-        this.failedCount = failedCount;
-        this.flowFiles = flowFiles;
-        this.metadatas = metadatas;
-        this.exceptions = exceptions;
+    public RecordSummary() {
+        this.flowFileResults = new ArrayList<>();
     }
 
-    public boolean isSuccess() {
-        return success;
-    }
-
-    public long getSentCount() {
-        return sentCount;
-    }
-
-    public long getAcknowledgedCount() {
-        return acknowledgedCount;
-    }
-
-    public long getFailedCount() {
-        return failedCount;
-    }
-
-    public List<FlowFile> getFlowFiles() {
-        return flowFiles;
-    }
-
-    public List<ProducerRecordMetadata> getMetadatas() {
-        return metadatas;
-    }
-
-    public List<Exception> getExceptions() {
-        return exceptions;
+    public List<FlowFileResult> getFlowFileResults() {
+        return flowFileResults;
     }
 }

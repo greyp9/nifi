@@ -22,6 +22,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.common.ServiceConfiguration;
+import org.apache.nifi.kafka.service.api.producer.FlowFileResult;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
@@ -33,6 +34,7 @@ import org.apache.nifi.kafka.service.producer.txn.KafkaTransactionalProducerWrap
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
@@ -42,7 +44,7 @@ public class Kafka3ProducerService implements KafkaProducerService {
     private final Logger logger = LoggerFactory.getLogger(getClass());
 
     private final Producer<byte[], byte[]> producer;
-    private final ProducerCallback callback;
+    private final List<ProducerCallback> callbacks;
 
     private final ServiceConfiguration serviceConfiguration;
 
@@ -53,13 +55,13 @@ public class Kafka3ProducerService implements KafkaProducerService {
                                  final ProducerConfiguration producerConfiguration) {
         final ByteArraySerializer serializer = new ByteArraySerializer();
         this.producer = new KafkaProducer<>(properties, serializer, serializer);
-        this.callback = new ProducerCallback();
+        this.callbacks = new ArrayList<>();
 
         this.serviceConfiguration = serviceConfiguration;
 
         this.wrapper = producerConfiguration.getUseTransactions()
-                ? new KafkaTransactionalProducerWrapper(producer, callback)
-                : new KafkaNonTransactionalProducerWrapper(producer, callback);
+                ? new KafkaTransactionalProducerWrapper(producer)
+                : new KafkaNonTransactionalProducerWrapper(producer);
     }
 
     @Override
@@ -75,15 +77,33 @@ public class Kafka3ProducerService implements KafkaProducerService {
 
     @Override
     public void send(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext) {
-        wrapper.send(kafkaRecords, publishContext);
-        logger.trace("send():inFlight");
+        final ProducerCallback callback = new ProducerCallback(publishContext.getFlowFile());
+        callbacks.add(callback);
+        final Exception publishException = publishContext.getException();
+        if (publishException == null) {
+            wrapper.send(kafkaRecords, publishContext, callback);
+            logger.trace("send():inFlight");
+        } else {
+            callback.getExceptions().add(publishException);
+        }
     }
 
     @Override
     public RecordSummary complete() {
-        producer.flush();
-        wrapper.complete();
-        return callback.waitComplete(serviceConfiguration.getMaxAckWaitMillis());
+        producer.flush();  // finish Kafka processing of in-flight data
+        wrapper.complete();  // commit Kafka transaction (when transactions configured)
+
+        final RecordSummary recordSummary = new RecordSummary();  // scrape the Kafka callbacks for disposition of in-flight data
+        final List<FlowFileResult> flowFileResults = recordSummary.getFlowFileResults();
+        for (final ProducerCallback callback : callbacks) {
+            // short-circuit the handling of the flowfile results here
+            if (callback.isFailure()) {
+                flowFileResults.add(callback.toFailureResult());
+            } else {
+                flowFileResults.add(callback.waitComplete(serviceConfiguration.getMaxAckWaitMillis()));
+            }
+        }
+        return recordSummary;
     }
 
     @Override

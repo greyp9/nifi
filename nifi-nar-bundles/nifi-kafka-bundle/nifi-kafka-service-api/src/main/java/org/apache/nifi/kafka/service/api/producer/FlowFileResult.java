@@ -18,49 +18,38 @@ package org.apache.nifi.kafka.service.api.producer;
 
 import org.apache.nifi.flowfile.FlowFile;
 
-import java.io.IOException;
+import java.util.List;
 
 /**
- * Specification of parameters used by a Kafka processor to publish records to Kafka in the context of an enabled
- * {@link org.apache.nifi.kafka.service.api.KafkaConnectionService}.
+ * Container for results of processing / sending one FlowFile to Kafka.
  */
-public class PublishContext {
-    private final String topic;
-    private final Integer partition;
-    private final Long timestamp;
-    private final FlowFile flowFile;
+public class FlowFileResult {
+    private final FlowFile flowFile;  // source data from NiFi
+    private final long sentCount;  // count of converted Kafka records (from NiFi)
+    private final List<ProducerRecordMetadata> metadatas;  // success results (from Kafka callback)
+    private final List<Exception> exceptions;  // failure results (from Kafka callback)
 
-    private Exception exception;
-
-    public PublishContext(final String topic, final Integer partition, final Long timestamp, final FlowFile flowFile) {
-        this.topic = topic;
-        this.partition = partition;
-        this.timestamp = timestamp;
+    public FlowFileResult(final FlowFile flowFile, final long sentCount,
+                          final List<ProducerRecordMetadata> metadatas, final List<Exception> exceptions) {
         this.flowFile = flowFile;
-        this.exception = null;
-    }
-
-    public String getTopic() {
-        return topic;
-    }
-
-    public Integer getPartition() {
-        return partition;
-    }
-
-    public Long getTimestamp() {
-        return timestamp;
+        this.sentCount = sentCount;
+        this.metadatas = metadatas;
+        this.exceptions = exceptions;
     }
 
     public FlowFile getFlowFile() {
         return flowFile;
     }
 
-    public Exception getException() {
-        return exception;
+    public long getSentCount() {
+        return sentCount;
     }
 
-    public void setException(final IOException e) {
-        exception = e;
+    public List<ProducerRecordMetadata> getMetadatas() {
+        return metadatas;
+    }
+
+    public List<Exception> getExceptions() {
+        return exceptions;
     }
 }

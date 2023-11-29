@@ -19,8 +19,8 @@ package org.apache.nifi.kafka.service.producer;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.kafka.service.api.producer.FlowFileResult;
 import org.apache.nifi.kafka.service.api.producer.ProducerRecordMetadata;
-import org.apache.nifi.kafka.service.api.producer.RecordSummary;
 import org.apache.nifi.kafka.shared.util.Notifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,25 +36,30 @@ public class ProducerCallback implements Callback {
     private final AtomicLong sentCount;
     private final AtomicLong acknowledgedCount;
     private final AtomicLong failedCount;
-    private final List<FlowFile> flowFiles;
+    private final FlowFile flowFile;
     private final List<ProducerRecordMetadata> metadatas;
     private final List<Exception> exceptions;
     private final Notifier notifier;
 
-    public ProducerCallback() {
+    public List<Exception> getExceptions() {
+        return exceptions;
+    }
+
+    public boolean isFailure() {
+        return !exceptions.isEmpty();
+    }
+
+    public ProducerCallback(final FlowFile flowFile) {
         this.sentCount = new AtomicLong(0L);
         this.acknowledgedCount = new AtomicLong(0L);
         this.failedCount = new AtomicLong(0L);
-        this.flowFiles = new ArrayList<>();
+        this.flowFile = flowFile;
         this.metadatas = new ArrayList<>();
         this.exceptions = new ArrayList<>();
         this.notifier = new Notifier();
     }
 
-    public long send(final FlowFile flowFile) {
-        // the source `FlowFile` and the associated `RecordMetadata` need to somehow be associated...
-
-        flowFiles.add(flowFile);
+    public long send() {
         return sentCount.incrementAndGet();
     }
 
@@ -70,6 +75,9 @@ public class ProducerCallback implements Callback {
             failedCount.addAndGet(1L);
             exceptions.add(exception);
         }
+        logger.trace("NIFI-11259 - onCompletion() - [{}][{}][{}][{}]",
+                metadata, exception, sentCount.get(), acknowledgedCount.get());
+
         notifier.notifyWaiter();
     }
 
@@ -77,12 +85,15 @@ public class ProducerCallback implements Callback {
         return new ProducerRecordMetadata(m.topic(), m.partition(), m.offset(), m.timestamp());
     }
 
-    public RecordSummary waitComplete(final long maxAckWaitMillis) {
+    public FlowFileResult waitComplete(final long maxAckWaitMillis) {
         logger.trace("waitComplete():start");
-        final Supplier<Boolean> conditionComplete = () -> (acknowledgedCount.get() == sentCount.get());
+        final Supplier<Boolean> conditionComplete = () -> ((acknowledgedCount.get() + failedCount.get()) == sentCount.get());
         final boolean success = notifier.waitForCondition(conditionComplete, maxAckWaitMillis);
         logger.trace("waitComplete():finish - {}", success);
-        return new RecordSummary(success, sentCount.get(), acknowledgedCount.get(), failedCount.get(),
-                flowFiles, metadatas, exceptions);
+        return new FlowFileResult(flowFile, sentCount.get(), metadatas, exceptions);
+    }
+
+    public FlowFileResult toFailureResult() {
+        return new FlowFileResult(flowFile, sentCount.get(), metadatas, exceptions);
     }
 }

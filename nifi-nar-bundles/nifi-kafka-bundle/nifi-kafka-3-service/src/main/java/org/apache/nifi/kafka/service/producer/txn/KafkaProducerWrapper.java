@@ -38,11 +38,9 @@ public abstract class KafkaProducerWrapper {
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
     protected final Producer<byte[], byte[]> producer;
-    protected final ProducerCallback callback;
 
-    public KafkaProducerWrapper(final Producer<byte[], byte[]> producer, final ProducerCallback callback) {
+    public KafkaProducerWrapper(final Producer<byte[], byte[]> producer) {
         this.producer = producer;
-        this.callback = callback;
     }
 
     /**
@@ -50,13 +48,12 @@ public abstract class KafkaProducerWrapper {
      */
     public abstract void init();
 
-    public void send(Iterator<KafkaRecord> kafkaRecords, PublishContext publishContext) {
+    public void send(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext, final ProducerCallback callback) {
         while (kafkaRecords.hasNext()) {
             producer.send(toProducerRecord(kafkaRecords.next(), publishContext), callback);
-            callback.send(publishContext.getFlowFile());
+            callback.send();
         }
         logger.trace("send():inFlight");
-
     }
 
     /**
