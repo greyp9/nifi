@@ -19,6 +19,7 @@ package org.apache.nifi.kafka.processors.publish.dependency;
 import org.apache.nifi.kafka.processors.PublishKafka;
 import org.apache.nifi.kafka.service.Kafka3ConnectionService;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
+import org.apache.nifi.kafka.shared.property.FailureStrategy;
 import org.apache.nifi.kafka.shared.property.SecurityProtocol;
 import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.security.util.KeystoreType;
@@ -121,12 +122,13 @@ public class PublishKafkaMultipleFFIT {
         runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
         runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
         runner.setProperty(PublishKafka.USE_TRANSACTIONS, transactionality.toString());
+        runner.setProperty(PublishKafka.FAILURE_STRATEGY, FailureStrategy.ROLLBACK.getValue());
 
         runner.enqueue(TEST_RECORD_VALUE);
         runner.enqueue(new byte[1024 * 1280]);  // by default, max 1MB per record
-        runner.run(2);
-        runner.assertTransferCount(PublishKafka.REL_SUCCESS, 1);
-        runner.assertTransferCount(PublishKafka.REL_FAILURE, 1);
+        runner.run();
+        runner.assertTransferCount(PublishKafka.REL_SUCCESS, 0);
+        runner.assertTransferCount(PublishKafka.REL_FAILURE, 0);
     }
 
     private String addKafkaConnectionService(final TestRunner runner) throws InitializationException {

@@ -33,4 +33,8 @@ public class RecordSummary {
     public List<FlowFileResult> getFlowFileResults() {
         return flowFileResults;
     }
+
+    public boolean isFailure() {
+        return flowFileResults.parallelStream().anyMatch(r -> (!r.getExceptions().isEmpty()));
+    }
 }

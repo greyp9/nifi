@@ -40,11 +40,12 @@ import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.producer.FlowFileResult;
 import org.apache.nifi.kafka.service.api.producer.KafkaProducerService;
 import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
-import org.apache.nifi.kafka.service.api.producer.ProducerRecordMetadata;
 import org.apache.nifi.kafka.service.api.producer.PublishContext;
 import org.apache.nifi.kafka.service.api.producer.RecordSummary;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
+import org.apache.nifi.kafka.shared.component.KafkaPublishComponent;
+import org.apache.nifi.kafka.shared.property.FailureStrategy;
 import org.apache.nifi.kafka.shared.property.PublishStrategy;
 import org.apache.nifi.kafka.shared.transaction.TransactionIdSupplier;
 import org.apache.nifi.logging.ComponentLog;
@@ -75,10 +76,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Tags({"kafka", "producer", "record"})
-public class PublishKafka extends AbstractProcessor implements VerifiableProcessor {
+public class PublishKafka extends AbstractProcessor implements KafkaPublishComponent, VerifiableProcessor {
 
     public static final PropertyDescriptor CONNECTION_SERVICE = new PropertyDescriptor.Builder()
             .name("Kafka Connection Service")
@@ -257,6 +257,7 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
             RECORD_KEY_WRITER,
             RECORD_METADATA_STRATEGY,
             MESSAGE_DEMARCATOR,
+            FAILURE_STRATEGY,
             KEY,
             KEY_ATTRIBUTE_ENCODING,
             ATTRIBUTE_NAME_REGEX,
@@ -314,20 +315,30 @@ public class PublishKafka extends AbstractProcessor implements VerifiableProcess
 
     private void publishFlowFiles(final ProcessContext context, final ProcessSession session,
                                   final List<FlowFile> flowFiles, final KafkaProducerService producerService) {
-        // transmit data to Kafka; receive results
         producerService.init();
         for (final FlowFile flowFile : flowFiles) {
             publishFlowFile(context, session, flowFile, producerService);
         }
         final RecordSummary recordSummary = producerService.complete();
-        // process results
-        final List<FlowFileResult> flowFileResults = recordSummary.getFlowFileResults();
+        if (recordSummary.isFailure()) {
+            // might this be a place we want to behave differently?  (route FlowFile to failure only on failure)
+            routeFailureStrategy(context, session, flowFiles);
+        } else {
+            routeResults(session, recordSummary.getFlowFileResults());
+        }
+    }
+
+    private void routeFailureStrategy(final ProcessContext context, final ProcessSession session, final List<FlowFile> flowFiles) {
+        final String strategy = context.getProperty(FAILURE_STRATEGY).getValue();
+        if (FailureStrategy.ROLLBACK.getValue().equals(strategy)) {
+            session.rollback();
+        } else {
+            session.transfer(flowFiles, REL_FAILURE);
+        }
+    }
+
+    private void routeResults(final ProcessSession session, final List<FlowFileResult> flowFileResults) {
         for (final FlowFileResult flowFileResult : flowFileResults) {
-            final List<String> offsets = flowFileResult.getMetadatas().stream()
-                    .map(ProducerRecordMetadata::getOffset)
-                    .map(l -> Long.toString(l))
-                    .collect(Collectors.toList());
-            getLogger().trace("NIFI-11259::onTrigger() - {} [{}] [{}]", flowFileResult.getSentCount(), offsets, flowFileResult.getExceptions());
             final Relationship relationship = flowFileResult.getExceptions().isEmpty() ? REL_SUCCESS : REL_FAILURE;
             session.transfer(flowFileResult.getFlowFile(), relationship);
         }
