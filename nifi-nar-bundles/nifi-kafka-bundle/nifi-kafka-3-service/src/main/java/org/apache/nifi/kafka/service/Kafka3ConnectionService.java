@@ -229,6 +229,9 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             propertiesProducer.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG,
                     new TransactionIdSupplier(producerConfiguration.getTransactionIdPrefix()).get());
         }
+        if (producerConfiguration.getDeliveryGuarantee() != null) {
+            propertiesProducer.put(ProducerConfig.ACKS_CONFIG, producerConfiguration.getDeliveryGuarantee());
+        }
         return new Kafka3ProducerService(propertiesProducer, serviceConfiguration, producerConfiguration);
     }
 
