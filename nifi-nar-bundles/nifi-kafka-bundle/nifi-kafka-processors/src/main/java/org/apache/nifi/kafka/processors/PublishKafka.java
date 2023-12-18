@@ -23,6 +23,7 @@ import org.apache.nifi.components.PropertyValue;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.processors.producer.common.PublishKafkaUtil;
+import org.apache.nifi.kafka.processors.producer.config.DeliveryGuarantee;
 import org.apache.nifi.kafka.processors.producer.convert.DelimitedStreamKafkaRecordConverter;
 import org.apache.nifi.kafka.processors.producer.convert.FlowFileStreamKafkaRecordConverter;
 import org.apache.nifi.kafka.processors.producer.convert.KafkaRecordConverter;
@@ -250,6 +251,7 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
 
     private static final List<PropertyDescriptor> DESCRIPTORS = Collections.unmodifiableList(Arrays.asList(
             CONNECTION_SERVICE,
+            DeliveryGuarantee.DELIVERY_GUARANTEE,
             TOPIC_NAME,
             RECORD_READER,
             RECORD_WRITER,
@@ -303,7 +305,9 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
 
         final boolean useTransactions = context.getProperty(USE_TRANSACTIONS).asBoolean();
         final String transactionalIdPrefix = context.getProperty(TRANSACTIONAL_ID_PREFIX).evaluateAttributeExpressions().getValue();
-        final ProducerConfiguration producerConfiguration = new ProducerConfiguration(useTransactions, transactionalIdPrefix);
+        final String deliveryGuarantee = context.getProperty(DeliveryGuarantee.DELIVERY_GUARANTEE).getValue();
+        final ProducerConfiguration producerConfiguration = new ProducerConfiguration(
+                useTransactions, transactionalIdPrefix, deliveryGuarantee);
 
         try (final KafkaProducerService producerService = connectionService.getProducerService(producerConfiguration)) {
             publishFlowFiles(context, session, flowFiles, producerService);
@@ -448,7 +452,9 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
         final boolean useTransactions = context.getProperty(USE_TRANSACTIONS).asBoolean();
         final String transactionalIdPrefix = context.getProperty(TRANSACTIONAL_ID_PREFIX).evaluateAttributeExpressions().getValue();
         final Supplier<String> transactionalIdSupplier = new TransactionIdSupplier(transactionalIdPrefix);
-        final ProducerConfiguration producerConfiguration = new ProducerConfiguration(useTransactions, transactionalIdSupplier.get());
+        final String deliveryGuarantee = context.getProperty(DeliveryGuarantee.DELIVERY_GUARANTEE).getValue();
+        final ProducerConfiguration producerConfiguration = new ProducerConfiguration(
+                useTransactions, transactionalIdSupplier.get(), deliveryGuarantee);
         final KafkaProducerService producerService = connectionService.getProducerService(producerConfiguration);
 
         final ConfigVerificationResult.Builder verificationPartitions = new ConfigVerificationResult.Builder()

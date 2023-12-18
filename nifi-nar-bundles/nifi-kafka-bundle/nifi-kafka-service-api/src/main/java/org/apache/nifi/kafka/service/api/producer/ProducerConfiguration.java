@@ -19,10 +19,14 @@ package org.apache.nifi.kafka.service.api.producer;
 public class ProducerConfiguration {
     private final boolean useTransactions;
     private final String transactionIdPrefix;
+    private final String deliveryGuarantee;
 
-    public ProducerConfiguration(final boolean useTransactions, final String transactionIdPrefix) {
+    public ProducerConfiguration(final boolean useTransactions,
+                                 final String transactionIdPrefix,
+                                 final String deliveryGuarantee) {
         this.useTransactions = useTransactions;
         this.transactionIdPrefix = transactionIdPrefix;
+        this.deliveryGuarantee = deliveryGuarantee;
     }
 
     public boolean getUseTransactions() {
@@ -31,5 +35,9 @@ public class ProducerConfiguration {
 
     public String getTransactionIdPrefix() {
         return transactionIdPrefix;
+    }
+
+    public String getDeliveryGuarantee() {
+        return deliveryGuarantee;
     }
 }
