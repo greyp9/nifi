@@ -87,7 +87,7 @@ public class PublishKafkaWrapperX4IT extends PublishKafkaBaseIT {
                 final List<Header> headers = Arrays.asList(record.headers().toArray());
                 assertEquals(2, headers.size());
                 assertTrue(headers.contains(new RecordHeader("a", "b".getBytes(StandardCharsets.UTF_8))));
-                assertTrue(headers.contains(new RecordHeader("c", "MapRecord[{d=e}]".getBytes(StandardCharsets.UTF_8))));
+                assertTrue(headers.contains(new RecordHeader("c", "{\"d\":\"e\"}".getBytes(StandardCharsets.UTF_8))));
                 // kafka record key
                 assertNull(record.key());
                 // kafka record value
