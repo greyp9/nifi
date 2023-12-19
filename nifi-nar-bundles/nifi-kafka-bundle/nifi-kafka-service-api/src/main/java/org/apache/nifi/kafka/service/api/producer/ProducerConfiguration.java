@@ -20,13 +20,16 @@ public class ProducerConfiguration {
     private final boolean useTransactions;
     private final String transactionIdPrefix;
     private final String deliveryGuarantee;
+    private final String compressionCodec;
 
     public ProducerConfiguration(final boolean useTransactions,
                                  final String transactionIdPrefix,
-                                 final String deliveryGuarantee) {
+                                 final String deliveryGuarantee,
+                                 final String compressionCodec) {
         this.useTransactions = useTransactions;
         this.transactionIdPrefix = transactionIdPrefix;
         this.deliveryGuarantee = deliveryGuarantee;
+        this.compressionCodec = compressionCodec;
     }
 
     public boolean getUseTransactions() {
@@ -39,5 +42,9 @@ public class ProducerConfiguration {
 
     public String getDeliveryGuarantee() {
         return deliveryGuarantee;
+    }
+
+    public String getCompressionCodec() {
+        return compressionCodec;
     }
 }
