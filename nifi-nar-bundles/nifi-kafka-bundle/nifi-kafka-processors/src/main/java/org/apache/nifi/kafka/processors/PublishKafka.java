@@ -17,6 +17,7 @@
 package org.apache.nifi.kafka.processors;
 
 import org.apache.nifi.annotation.documentation.Tags;
+import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.PropertyValue;
@@ -74,6 +75,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -250,6 +252,27 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
             .dependsOn(PUBLISH_STRATEGY, PublishStrategy.USE_WRAPPER.getValue())
             .build();
 
+    static final AllowableValue ROUND_ROBIN_PARTITIONING = new AllowableValue("org.apache.nifi.processors.kafka.pubsub.Partitioners.RoundRobinPartitioner",
+            "RoundRobinPartitioner",
+            "Messages will be assigned partitions in a round-robin fashion, sending the first message to Partition 1, "
+                    + "the next Partition to Partition 2, and so on, wrapping as necessary.");
+    static final AllowableValue RANDOM_PARTITIONING = new AllowableValue("org.apache.kafka.clients.producer.internals.DefaultPartitioner",
+            "DefaultPartitioner", "The default partitioning strategy will choose the sticky partition that changes when the batch is full "
+            + "(See KIP-480 for details about sticky partitioning).");
+    static final AllowableValue EXPRESSION_LANGUAGE_PARTITIONING = new AllowableValue("org.apache.nifi.processors.kafka.pubsub.Partitioners.ExpressionLanguagePartitioner",
+            "Expression Language Partitioner",
+            "Interprets the <Partition> property as Expression Language that will be evaluated against each FlowFile. This Expression will be evaluated once against the FlowFile, " +
+                    "so all Records in a given FlowFile will go to the same partition.");
+
+    static final PropertyDescriptor PARTITION_CLASS = new PropertyDescriptor.Builder()
+            .name("partitioner.class")
+            .displayName("Partitioner class")
+            .description("Specifies which class to use to compute a partition id for a message. Corresponds to Kafka's 'partitioner.class' property.")
+            .allowableValues(ROUND_ROBIN_PARTITIONING, RANDOM_PARTITIONING, EXPRESSION_LANGUAGE_PARTITIONING)
+            .defaultValue(RANDOM_PARTITIONING.getValue())
+            .required(false)
+            .build();
+
     static final PropertyDescriptor PARTITION = new PropertyDescriptor.Builder()
             .name("partition")
             .displayName("Partition")
@@ -279,6 +302,7 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
             MESSAGE_KEY_FIELD,
             MAX_REQUEST_SIZE,
             COMPRESSION_CODEC,
+            PARTITION_CLASS,
             PARTITION
     ));
 
@@ -318,8 +342,9 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
         final String transactionalIdPrefix = context.getProperty(TRANSACTIONAL_ID_PREFIX).evaluateAttributeExpressions().getValue();
         final String deliveryGuarantee = context.getProperty(DeliveryGuarantee.DELIVERY_GUARANTEE).getValue();
         final String compressionCodec = context.getProperty(COMPRESSION_CODEC).getValue();
+        final String partitionClass = context.getProperty(PARTITION_CLASS).getValue();
         final ProducerConfiguration producerConfiguration = new ProducerConfiguration(
-                useTransactions, transactionalIdPrefix, deliveryGuarantee, compressionCodec);
+                useTransactions, transactionalIdPrefix, deliveryGuarantee, compressionCodec, partitionClass);
 
         try (final KafkaProducerService producerService = connectionService.getProducerService(producerConfiguration)) {
             publishFlowFiles(context, session, flowFiles, producerService);
@@ -367,7 +392,7 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
         final RecordSetWriterFactory keyWriterFactory = context.getProperty(RECORD_KEY_WRITER).asControllerService(RecordSetWriterFactory.class);
 
         final String topic = context.getProperty(TOPIC_NAME).evaluateAttributeExpressions(flowFile.getAttributes()).getValue();
-        final Integer partition = context.getProperty(PARTITION).evaluateAttributeExpressions(flowFile.getAttributes()).asInteger();
+        final Integer partition = getPartition(context, flowFile);
         final PublishContext publishContext = new PublishContext(topic, partition, null, flowFile);
 
         final PropertyValue propertyDemarcator = context.getProperty(MESSAGE_DEMARCATOR);
@@ -395,6 +420,15 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
         final PublishCallback callback = new PublishCallback(
                 producerService, publishContext, kafkaRecordConverter, flowFile.getAttributes(), flowFile.getSize());
         session.read(flowFile, callback);
+    }
+
+    private Integer getPartition(final ProcessContext context, final FlowFile flowFile) {
+        final String partitionClass = context.getProperty(PARTITION_CLASS).getValue();
+        if (EXPRESSION_LANGUAGE_PARTITIONING.getValue().equals(partitionClass)) {
+            final String partition = context.getProperty(PARTITION).evaluateAttributeExpressions(flowFile).getValue();
+            return Objects.hashCode(partition);
+        }
+        return null;
     }
 
     private KafkaRecordConverter getKafkaRecordConverterFor(
@@ -466,8 +500,9 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
         final Supplier<String> transactionalIdSupplier = new TransactionIdSupplier(transactionalIdPrefix);
         final String deliveryGuarantee = context.getProperty(DeliveryGuarantee.DELIVERY_GUARANTEE).getValue();
         final String compressionCodec = context.getProperty(COMPRESSION_CODEC).getValue();
+        final String partitionClass = context.getProperty(PARTITION_CLASS).getValue();
         final ProducerConfiguration producerConfiguration = new ProducerConfiguration(
-                useTransactions, transactionalIdSupplier.get(), deliveryGuarantee, compressionCodec);
+                useTransactions, transactionalIdSupplier.get(), deliveryGuarantee, compressionCodec, partitionClass);
         final KafkaProducerService producerService = connectionService.getProducerService(producerConfiguration);
 
         final ConfigVerificationResult.Builder verificationPartitions = new ConfigVerificationResult.Builder()
