@@ -21,15 +21,19 @@ public class ProducerConfiguration {
     private final String transactionIdPrefix;
     private final String deliveryGuarantee;
     private final String compressionCodec;
+    private final String partitionClass;
+
 
     public ProducerConfiguration(final boolean useTransactions,
                                  final String transactionIdPrefix,
                                  final String deliveryGuarantee,
-                                 final String compressionCodec) {
+                                 final String compressionCodec,
+                                 final String partitionClass) {
         this.useTransactions = useTransactions;
         this.transactionIdPrefix = transactionIdPrefix;
         this.deliveryGuarantee = deliveryGuarantee;
         this.compressionCodec = compressionCodec;
+        this.partitionClass = partitionClass;
     }
 
     public boolean getUseTransactions() {
@@ -46,5 +50,9 @@ public class ProducerConfiguration {
 
     public String getCompressionCodec() {
         return compressionCodec;
+    }
+
+    public String getPartitionClass() {
+        return partitionClass;
     }
 }

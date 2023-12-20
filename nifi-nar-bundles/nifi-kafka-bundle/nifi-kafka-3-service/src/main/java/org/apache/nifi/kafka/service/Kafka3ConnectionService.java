@@ -235,6 +235,10 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
         if (producerConfiguration.getCompressionCodec() != null) {
             propertiesProducer.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, producerConfiguration.getCompressionCodec());
         }
+        final String partitionClass = producerConfiguration.getPartitionClass();
+        if (partitionClass != null && partitionClass.startsWith("org.apache.kafka")) {
+            propertiesProducer.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, partitionClass);
+        }
         return new Kafka3ProducerService(propertiesProducer, serviceConfiguration, producerConfiguration);
     }
 
