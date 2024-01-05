@@ -259,7 +259,7 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
     static final AllowableValue RANDOM_PARTITIONING = new AllowableValue("org.apache.kafka.clients.producer.internals.DefaultPartitioner",
             "DefaultPartitioner", "The default partitioning strategy will choose the sticky partition that changes when the batch is full "
             + "(See KIP-480 for details about sticky partitioning).");
-    static final AllowableValue EXPRESSION_LANGUAGE_PARTITIONING = new AllowableValue("org.apache.nifi.processors.kafka.pubsub.Partitioners.ExpressionLanguagePartitioner",
+    public static final AllowableValue EXPRESSION_LANGUAGE_PARTITIONING = new AllowableValue("org.apache.nifi.processors.kafka.pubsub.Partitioners.ExpressionLanguagePartitioner",
             "Expression Language Partitioner",
             "Interprets the <Partition> property as Expression Language that will be evaluated against each FlowFile. This Expression will be evaluated once against the FlowFile, " +
                     "so all Records in a given FlowFile will go to the same partition.");
