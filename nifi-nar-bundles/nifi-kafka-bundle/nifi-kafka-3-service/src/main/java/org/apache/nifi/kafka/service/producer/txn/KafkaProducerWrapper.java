@@ -64,7 +64,8 @@ public abstract class KafkaProducerWrapper {
     private ProducerRecord<byte[], byte[]> toProducerRecord(final KafkaRecord kafkaRecord, final PublishContext publishContext) {
         final String topic = Optional.ofNullable(kafkaRecord.getTopic()).orElse(publishContext.getTopic());
         final Integer partition = Optional.ofNullable(kafkaRecord.getPartition()).orElse(publishContext.getPartition());
-        return new ProducerRecord<>(topic, partition, kafkaRecord.getTimestamp(), kafkaRecord.getKey(), kafkaRecord.getValue(), toKafkaHeadersNative(kafkaRecord));
+        final Integer moddedPartition = partition == null ? null : Math.abs(partition) % (producer.partitionsFor(topic).size());
+        return new ProducerRecord<>(topic, moddedPartition, kafkaRecord.getTimestamp(), kafkaRecord.getKey(), kafkaRecord.getValue(), toKafkaHeadersNative(kafkaRecord));
     }
 
     private List<Header> toKafkaHeadersNative(final KafkaRecord kafkaRecord) {
