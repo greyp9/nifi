@@ -92,11 +92,10 @@ public class PublishKafkaWrapperX5IT extends PublishKafkaBaseIT {
     public void test1ProduceOneFlowFile() throws InitializationException, IOException {
         final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
         runner.setValidateExpressionUsage(false);
-        addKafkaConnectionService(runner);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
         addRecordReaderService(runner);
         addRecordWriterService(runner);
 
-        runner.setProperty("Kafka Connection Service", SERVICE_ID);
         runner.setProperty("Topic Name", TEST_TOPIC);
         runner.setProperty("partition", Integer.toString(TEST_PARTITION));
         runner.getLogger().info("partition={}", new Object[] { TEST_PARTITION });

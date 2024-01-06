@@ -35,11 +35,10 @@ public class PublishKafkaFailureStrategyIT extends PublishKafkaBaseIT {
     public void testProduceRouteToFailure() throws InitializationException, IOException {
         final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
         runner.setValidateExpressionUsage(false);
-        addKafkaConnectionService(runner);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
         addRecordReaderService(runner);
         addRecordWriterService(runner);
 
-        runner.setProperty(PublishKafka.CONNECTION_SERVICE, SERVICE_ID);
         runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
         runner.setProperty(PublishKafka.FAILURE_STRATEGY, FailureStrategy.ROUTE_TO_FAILURE);
 
@@ -57,11 +56,9 @@ public class PublishKafkaFailureStrategyIT extends PublishKafkaBaseIT {
     public void testProduceRollback() throws InitializationException, IOException {
         final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
         runner.setValidateExpressionUsage(false);
-        addKafkaConnectionService(runner);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
         addRecordReaderService(runner);
         addRecordWriterService(runner);
-
-        runner.setProperty(PublishKafka.CONNECTION_SERVICE, SERVICE_ID);
         runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
         runner.setProperty(PublishKafka.FAILURE_STRATEGY, FailureStrategy.ROLLBACK);
 
