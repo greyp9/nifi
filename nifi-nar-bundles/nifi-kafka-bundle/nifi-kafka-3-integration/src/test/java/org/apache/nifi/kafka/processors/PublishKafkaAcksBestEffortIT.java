@@ -51,9 +51,7 @@ public class PublishKafkaAcksBestEffortIT extends PublishKafkaBaseIT {
     public void test_1_KafkaTestContainerProduceOneFail() throws InitializationException {
         final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
         runner.setValidateExpressionUsage(false);
-        addKafkaConnectionService(runner);
-
-        runner.setProperty(PublishKafka.CONNECTION_SERVICE, SERVICE_ID);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
         runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
         runner.setProperty(DeliveryGuarantee.DELIVERY_GUARANTEE, DeliveryGuarantee.DELIVERY_BEST_EFFORT);  // invalid if transactionality=true (default)
 
@@ -65,9 +63,7 @@ public class PublishKafkaAcksBestEffortIT extends PublishKafkaBaseIT {
     public void test_1_KafkaTestContainerProduceOne() throws InitializationException {
         final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
         runner.setValidateExpressionUsage(false);
-        addKafkaConnectionService(runner);
-
-        runner.setProperty(PublishKafka.CONNECTION_SERVICE, SERVICE_ID);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
         runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
         runner.setProperty(PublishKafka.USE_TRANSACTIONS, Boolean.FALSE.toString());
         runner.setProperty(DeliveryGuarantee.DELIVERY_GUARANTEE, DeliveryGuarantee.DELIVERY_BEST_EFFORT);
