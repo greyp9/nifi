@@ -60,36 +60,40 @@ public abstract class PublishKafkaBaseIT {
         objectMapper = new ObjectMapper();
     }
 
-    protected void addKafkaConnectionService(final TestRunner runner) throws InitializationException {
+    protected String addKafkaConnectionService(final TestRunner runner) throws InitializationException {
         final Map<String, String> connectionServiceProps = new HashMap<>();
         connectionServiceProps.put(Kafka3ConnectionService.BOOTSTRAP_SERVERS.getName(), kafka.getBootstrapServers());
         final KafkaConnectionService connectionService = new Kafka3ConnectionService();
         runner.addControllerService(SERVICE_ID, connectionService, connectionServiceProps);
         runner.enableControllerService(connectionService);
+        return SERVICE_ID;
     }
 
-    protected void addRecordReaderService(final TestRunner runner) throws InitializationException {
+    protected String addRecordReaderService(final TestRunner runner) throws InitializationException {
         final String readerId = "record-reader";
         final RecordReaderFactory readerService = new JsonTreeReader();
         runner.addControllerService(readerId, readerService);
         runner.enableControllerService(readerService);
         runner.setProperty(readerId, readerId);
+        return readerId;
     }
 
-    protected void addRecordWriterService(final TestRunner runner) throws InitializationException {
+    protected String addRecordWriterService(final TestRunner runner) throws InitializationException {
         final String writerId = "record-writer";
         final RecordSetWriterFactory writerService = new JsonRecordSetWriter();
         runner.addControllerService(writerId, writerService);
         runner.enableControllerService(writerService);
         runner.setProperty(writerId, writerId);
+        return writerId;
     }
 
-    protected void addRecordKeyWriterService(final TestRunner runner) throws InitializationException {
+    protected String addRecordKeyWriterService(final TestRunner runner) throws InitializationException {
         final String writerId = "record-key-writer";
         final RecordSetWriterFactory writerService = new JsonRecordSetWriter();
         runner.addControllerService(writerId, writerService);
         runner.enableControllerService(writerService);
         runner.setProperty(writerId, writerId);
+        return writerId;
     }
 
     protected Properties getKafkaConsumerProperties() {

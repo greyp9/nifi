@@ -54,11 +54,10 @@ public class PublishKafkaRecordIT extends PublishKafkaBaseIT {
     public void test1ProduceOneFlowFile() throws InitializationException, IOException {
         final TestRunner runner = TestRunners.newTestRunner(PublishKafka.class);
         runner.setValidateExpressionUsage(false);
-        addKafkaConnectionService(runner);
+        runner.setProperty(PublishKafka.CONNECTION_SERVICE, addKafkaConnectionService(runner));
         addRecordReaderService(runner);
         addRecordWriterService(runner);
 
-        runner.setProperty(PublishKafka.CONNECTION_SERVICE, SERVICE_ID);
         runner.setProperty(PublishKafka.TOPIC_NAME, getClass().getName());
         runner.setProperty(PublishKafka.KEY, KEY_ATTRIBUTE_KEY);
         runner.setProperty(PublishKafka.ATTRIBUTE_NAME_REGEX, "a.*");
