@@ -76,6 +76,8 @@
                             <includes>
                                 <include>**/*IT.java</include>
                             </includes>
+                            <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
+                            <redirectTestOutputToFile>true</redirectTestOutputToFile>
                         </configuration>
                     </execution>
                 </executions>
