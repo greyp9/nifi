@@ -179,13 +179,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
 
     @OnStopped
     public void onStopped() {
-        if (consumerService != null) {
-            try {
-                consumerService.close();
-            } catch (final Exception e) {
-                getLogger().warn("Closing Consumer Service failed", e);
-            }
-        }
+        // discard reference; leave controller service state intact
+        consumerService = null;
     }
 
     @Override
