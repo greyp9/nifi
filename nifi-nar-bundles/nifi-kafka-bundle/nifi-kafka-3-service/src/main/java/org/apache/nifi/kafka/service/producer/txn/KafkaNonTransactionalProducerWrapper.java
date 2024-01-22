@@ -29,6 +29,10 @@ public class KafkaNonTransactionalProducerWrapper extends KafkaProducerWrapper {
     }
 
     @Override
-    public void complete() {
+    public void commit() {
+    }
+
+    @Override
+    public void abort() {
     }
 }

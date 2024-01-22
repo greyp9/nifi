@@ -64,7 +64,6 @@ import org.apache.nifi.serialization.RecordReaderFactory;
 import org.apache.nifi.serialization.RecordSetWriterFactory;
 
 import java.io.BufferedInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -373,6 +372,7 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
         final String strategy = context.getProperty(FAILURE_STRATEGY).getValue();
         if (FailureStrategy.ROLLBACK.getValue().equals(strategy)) {
             session.rollback();
+            context.yield();
         } else {
             session.transfer(flowFiles, REL_FAILURE);
         }
@@ -481,7 +481,7 @@ public class PublishKafka extends AbstractProcessor implements KafkaPublishCompo
             try (final InputStream is = new BufferedInputStream(in)) {
                 final Iterator<KafkaRecord> records = kafkaConverter.convert(attributes, is, inputLength);
                 producerService.send(records, publishContext);
-            } catch (IOException e) {
+            } catch (final Exception e) {
                 publishContext.setException(e);  // on data pre-process failure, indicate this to controller service
                 producerService.send(Collections.emptyIterator(), publishContext);
             }
