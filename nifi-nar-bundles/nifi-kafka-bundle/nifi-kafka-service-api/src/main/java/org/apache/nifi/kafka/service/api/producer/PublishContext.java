@@ -18,8 +18,6 @@ package org.apache.nifi.kafka.service.api.producer;
 
 import org.apache.nifi.flowfile.FlowFile;
 
-import java.io.IOException;
-
 /**
  * Specification of parameters used by a Kafka processor to publish records to Kafka in the context of an enabled
  * {@link org.apache.nifi.kafka.service.api.KafkaConnectionService}.
