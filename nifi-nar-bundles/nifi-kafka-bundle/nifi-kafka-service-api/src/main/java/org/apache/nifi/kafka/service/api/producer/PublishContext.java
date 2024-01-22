@@ -60,7 +60,7 @@ public class PublishContext {
         return exception;
     }
 
-    public void setException(final IOException e) {
+    public void setException(final Exception e) {
         exception = e;
     }
 }

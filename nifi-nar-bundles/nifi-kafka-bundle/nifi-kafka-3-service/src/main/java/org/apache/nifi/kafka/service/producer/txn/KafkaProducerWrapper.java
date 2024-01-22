@@ -50,7 +50,8 @@ public abstract class KafkaProducerWrapper {
 
     public void send(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext, final ProducerCallback callback) {
         while (kafkaRecords.hasNext()) {
-            producer.send(toProducerRecord(kafkaRecords.next(), publishContext), callback);
+            final KafkaRecord kafkaRecord = kafkaRecords.next();
+            producer.send(toProducerRecord(kafkaRecord, publishContext), callback);
             callback.send();
         }
         logger.trace("send():inFlight");
@@ -59,7 +60,12 @@ public abstract class KafkaProducerWrapper {
     /**
      * Transaction-enabled publish to Kafka involves the use of special Kafka client library APIs.
      */
-    public abstract void complete();
+    public abstract void commit();
+
+    /**
+     * Transaction-enabled publish to Kafka involves the use of special Kafka client library APIs.
+     */
+    public abstract void abort();
 
     private ProducerRecord<byte[], byte[]> toProducerRecord(final KafkaRecord kafkaRecord, final PublishContext publishContext) {
         final String topic = Optional.ofNullable(kafkaRecord.getTopic()).orElse(publishContext.getTopic());
