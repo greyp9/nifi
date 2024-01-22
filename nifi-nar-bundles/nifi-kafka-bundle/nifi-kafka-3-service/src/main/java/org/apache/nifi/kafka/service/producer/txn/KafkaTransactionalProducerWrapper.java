@@ -31,13 +31,18 @@ public class KafkaTransactionalProducerWrapper extends KafkaProducerWrapper {
     }
 
     @Override
-    public void complete() {
+    public void commit() {
         try {
             producer.commitTransaction();
             logger.trace("committed");
         } catch (final Exception e) {
-            producer.abortTransaction();
-            logger.trace("aborted");
+            abort();
         }
+    }
+
+    @Override
+    public void abort() {
+        producer.abortTransaction();
+        logger.trace("aborted");
     }
 }

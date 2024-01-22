@@ -34,9 +34,11 @@ import org.apache.nifi.kafka.service.producer.txn.KafkaTransactionalProducerWrap
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
@@ -79,19 +81,28 @@ public class Kafka3ProducerService implements KafkaProducerService {
     public void send(final Iterator<KafkaRecord> kafkaRecords, final PublishContext publishContext) {
         final ProducerCallback callback = new ProducerCallback(publishContext.getFlowFile());
         callbacks.add(callback);
-        final Exception publishException = publishContext.getException();
-        if (publishException == null) {
-            wrapper.send(kafkaRecords, publishContext, callback);
-            logger.trace("send():inFlight");
-        } else {
-            callback.getExceptions().add(publishException);
+        Optional.ofNullable(publishContext.getException()).ifPresent(e -> callback.getExceptions().add(e));
+        if (callback.getExceptions().isEmpty()) {
+            try {
+                wrapper.send(kafkaRecords, publishContext, callback);
+                logger.trace("send():inFlight");
+            } catch (final UncheckedIOException e) {
+                callback.getExceptions().add(e);
+                logger.trace("send():{}}", e.getMessage());
+            }
         }
     }
 
     @Override
     public RecordSummary complete() {
-        producer.flush();  // finish Kafka processing of in-flight data
-        wrapper.complete();  // commit Kafka transaction (when transactions configured)
+        final boolean shouldCommit = callbacks.stream().noneMatch(ProducerCallback::isFailure);
+        if (shouldCommit) {
+            producer.flush();  // finish Kafka processing of in-flight data
+            wrapper.commit();  // commit Kafka transaction (when transactions configured)
+        } else {
+            // rollback on transactions + exception
+            wrapper.abort();
+        }
 
         final RecordSummary recordSummary = new RecordSummary();  // scrape the Kafka callbacks for disposition of in-flight data
         final List<FlowFileResult> flowFileResults = recordSummary.getFlowFileResults();
