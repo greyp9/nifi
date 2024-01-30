@@ -23,7 +23,10 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.processors.kafka.pubsub.ConsumeKafkaRecord_2_6;
+import org.apache.nifi.provenance.ProvenanceEventRecord;
+import org.apache.nifi.provenance.ProvenanceEventType;
 import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
@@ -69,6 +72,17 @@ public class ConsumeKafkaRecord_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         final List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship("success");
         assertEquals(1, flowFiles.size());
         for (final MockFlowFile flowFile : flowFiles) {
+            flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, TOPIC);
+            flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(0));
+            flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(0));
+            flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
+            flowFile.assertAttributeEquals("record.count", Long.toString(3));
+
+            final List<ProvenanceEventRecord> provenanceEvents = runner.getProvenanceEvents();
+            assertEquals(1, provenanceEvents.size());
+            final ProvenanceEventRecord provenanceEvent = provenanceEvents.getFirst();
+            assertEquals(ProvenanceEventType.RECEIVE, provenanceEvent.getEventType());
+
             // [{"id":1,"name":"A"},{"id":2,"name":"B"},{"id":3,"name":"C"}]
             final JsonNode jsonNodeTree = objectMapper.readTree(flowFile.getContent());
             assertInstanceOf(ArrayNode.class, jsonNodeTree);
