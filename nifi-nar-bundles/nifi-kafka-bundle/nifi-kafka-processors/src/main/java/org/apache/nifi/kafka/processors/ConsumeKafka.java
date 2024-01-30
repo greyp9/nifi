@@ -22,6 +22,7 @@ import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.processors.consumer.ProcessingStrategy;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
@@ -45,8 +46,21 @@ import org.apache.nifi.processor.VerifiableProcessor;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.provenance.ProvenanceReporter;
+import org.apache.nifi.schema.access.SchemaNotFoundException;
+import org.apache.nifi.serialization.MalformedRecordException;
+import org.apache.nifi.serialization.RecordReader;
+import org.apache.nifi.serialization.RecordReaderFactory;
+import org.apache.nifi.serialization.RecordSetWriter;
+import org.apache.nifi.serialization.RecordSetWriterFactory;
+import org.apache.nifi.serialization.record.Record;
+import org.apache.nifi.serialization.record.RecordSchema;
+import org.apache.nifi.serialization.record.RecordSet;
 import org.apache.nifi.util.StringUtils;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -89,6 +103,22 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .required(true)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
             .expressionLanguageSupported(NONE)
+            .build();
+
+    static final PropertyDescriptor RECORD_READER = new PropertyDescriptor.Builder()
+            .name("record-reader")
+            .displayName("Record Reader")
+            .description("The Record Reader to use for incoming Kafka messages")
+            .identifiesControllerService(RecordReaderFactory.class)
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
+            .build();
+
+    static final PropertyDescriptor RECORD_WRITER = new PropertyDescriptor.Builder()
+            .name("record-writer")
+            .displayName("Record Writer")
+            .description("The Record Writer to use in order to serialize the outgoing FlowFiles")
+            .identifiesControllerService(RecordSetWriterFactory.class)
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
             .build();
 
     static final PropertyDescriptor AUTO_OFFSET_RESET = new PropertyDescriptor.Builder()
@@ -137,6 +167,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             CONNECTION_SERVICE,
             GROUP_ID,
             TOPIC_NAME,
+            RECORD_READER,
+            RECORD_WRITER,
             AUTO_OFFSET_RESET,
             PROCESSING_STRATEGY,
             HEADER_ENCODING,
@@ -228,8 +260,50 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         final ProcessingStrategy processingStrategy = ProcessingStrategy.valueOf(context.getProperty(PROCESSING_STRATEGY).getValue());
         if (ProcessingStrategy.FLOW_FILE == processingStrategy) {
             processFlowFileConsumerRecords(session, pollingContext, consumerRecords);
+        } else if (ProcessingStrategy.RECORD == processingStrategy) {
+            processRecordConsumerRecords(context, session, pollingContext, consumerRecords);
         } else {
             throw new ProcessException(String.format("Processing Strategy not supported [%s]", processingStrategy));
+        }
+    }
+
+    private void processRecordConsumerRecords(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
+        final RecordReaderFactory readerFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
+        final RecordSetWriterFactory writerFactory = context.getProperty(RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
+        try {
+            while (consumerRecords.hasNext()) {
+                final ByteRecord consumerRecord = consumerRecords.next();
+                final byte[] valueIn = consumerRecord.getValue();
+                int recordCount = 0;
+                if (valueIn.length > 0) {
+                    final InputStream in = new ByteArrayInputStream(valueIn);
+                    final Map<String, String> attributes = getAttributes(consumerRecord);
+                    final RecordReader reader = readerFactory.createRecordReader(attributes, in, valueIn.length, getLogger());
+                    FlowFile flowFile = session.create();
+                    flowFile = session.putAllAttributes(flowFile, attributes);
+                    try (final OutputStream rawOut = session.write(flowFile)) {
+                        final RecordSet recordSet = reader.createRecordSet();
+                        final RecordSchema schema = writerFactory.getSchema(attributes, recordSet.getSchema());
+                        final RecordSetWriter writer = writerFactory.createWriter(getLogger(), schema, rawOut, attributes);
+                        Record record;
+                        writer.beginRecordSet();
+                        while ((record = recordSet.next()) != null) {
+                            ++recordCount;
+                            writer.write(record);
+                        }
+                        writer.finishRecordSet();
+                        writer.flush();
+                        final ProvenanceReporter provenanceReporter = session.getProvenanceReporter();
+                        final String transitUri = String.format(TRANSIT_URI_FORMAT, consumerRecord.getTopic(), consumerRecord.getPartition());
+                        provenanceReporter.receive(flowFile, transitUri);
+                    }
+                    flowFile = session.putAttribute(flowFile, "record.count", String.valueOf(recordCount));
+                    session.transfer(flowFile, SUCCESS);
+                }
+            }
+            session.commitAsync();
+        } catch (MalformedRecordException | SchemaNotFoundException | IOException e) {
+            throw new ProcessException(e);
         }
     }
 

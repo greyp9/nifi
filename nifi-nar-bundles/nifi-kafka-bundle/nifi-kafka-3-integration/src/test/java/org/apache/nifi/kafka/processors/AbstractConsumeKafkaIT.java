@@ -18,9 +18,13 @@ package org.apache.nifi.kafka.processors;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.nifi.json.JsonRecordSetWriter;
+import org.apache.nifi.json.JsonTreeReader;
 import org.apache.nifi.kafka.service.Kafka3ConnectionService;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.reporting.InitializationException;
+import org.apache.nifi.serialization.RecordReaderFactory;
+import org.apache.nifi.serialization.RecordSetWriterFactory;
 import org.apache.nifi.util.TestRunner;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -45,6 +49,24 @@ public abstract class AbstractConsumeKafkaIT {
         runner.addControllerService(CONNECTION_SERVICE_ID, connectionService);
         runner.setProperty(connectionService, Kafka3ConnectionService.BOOTSTRAP_SERVERS, kafkaContainer.getBootstrapServers());
         runner.enableControllerService(connectionService);
+    }
+
+    protected String addRecordReaderService(final TestRunner runner) throws InitializationException {
+        final String readerId = "record-reader";
+        final RecordReaderFactory readerService = new JsonTreeReader();
+        runner.addControllerService(readerId, readerService);
+        runner.enableControllerService(readerService);
+        runner.setProperty(readerId, readerId);
+        return readerId;
+    }
+
+    protected String addRecordWriterService(final TestRunner runner) throws InitializationException {
+        final String writerId = "record-writer";
+        final RecordSetWriterFactory writerService = new JsonRecordSetWriter();
+        runner.addControllerService(writerId, writerService);
+        runner.enableControllerService(writerService);
+        runner.setProperty(writerId, writerId);
+        return writerId;
     }
 
     protected Properties getProducerProperties() {
