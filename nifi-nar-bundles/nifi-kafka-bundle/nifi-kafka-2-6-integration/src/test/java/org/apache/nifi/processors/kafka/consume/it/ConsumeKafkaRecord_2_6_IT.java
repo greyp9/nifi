@@ -20,9 +20,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.commons.io.IOUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.processors.kafka.pubsub.ConsumeKafkaRecord_2_6;
 import org.apache.nifi.provenance.ProvenanceEventRecord;
@@ -41,7 +38,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -56,8 +52,6 @@ public class ConsumeKafkaRecord_2_6_IT extends ConsumeKafka_2_6_BaseIT {
 
     @Test
     public void testKafkaTestContainerProduceConsumeOne() throws ExecutionException, InterruptedException, IOException, InitializationException {
-        testContainerProduceOne();
-
         final TestRunner runner = TestRunners.newTestRunner(ConsumeKafkaRecord_2_6.class);
         runner.setValidateExpressionUsage(false);
         final URI uri = URI.create(kafka.getBootstrapServers());
@@ -67,46 +61,44 @@ public class ConsumeKafkaRecord_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         runner.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         runner.setProperty("topic", TOPIC);
         runner.setProperty("group.id", GROUP_ID);
-        runner.run();
-        runner.assertTransferCount("success", 1);
-        final List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship("success");
-        assertEquals(1, flowFiles.size());
-        for (final MockFlowFile flowFile : flowFiles) {
-            flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, TOPIC);
-            flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(0));
-            flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(0));
-            flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
-            flowFile.assertAttributeEquals("record.count", Long.toString(3));
+        runner.run(1, false, true);
 
-            final List<ProvenanceEventRecord> provenanceEvents = runner.getProvenanceEvents();
-            assertEquals(1, provenanceEvents.size());
-            final ProvenanceEventRecord provenanceEvent = provenanceEvents.getFirst();
-            assertEquals(ProvenanceEventType.RECEIVE, provenanceEvent.getEventType());
-
-            // [{"id":1,"name":"A"},{"id":2,"name":"B"},{"id":3,"name":"C"}]
-            final JsonNode jsonNodeTree = objectMapper.readTree(flowFile.getContent());
-            assertInstanceOf(ArrayNode.class, jsonNodeTree);
-            final ArrayNode arrayNode = (ArrayNode) jsonNodeTree;
-            final Iterator<JsonNode> elements = arrayNode.elements();
-            assertEquals(TEST_RECORD_COUNT, arrayNode.size());
-            while (elements.hasNext()) {
-                final JsonNode jsonNode = elements.next();
-                assertTrue(Arrays.asList(1, 2, 3).contains(jsonNode.get("id").asInt()));
-                assertTrue(Arrays.asList("A", "B", "C").contains(jsonNode.get("name").asText()));
-            }
-        }
-    }
-
-    private void testContainerProduceOne() throws ExecutionException, InterruptedException, IOException {
         final String message = new String(IOUtils.toByteArray(Objects.requireNonNull(
                 getClass().getClassLoader().getResource(TEST_RESOURCE))), StandardCharsets.UTF_8);
-        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProperties())) {
-            final ProducerRecord<String, String> record = new ProducerRecord<>(TOPIC, null, message);
-            final Future<RecordMetadata> future = producer.send(record);
-            final RecordMetadata metadata = future.get();
-            assertEquals(TOPIC, metadata.topic());
-            assertTrue(metadata.hasOffset());
-            assertEquals(0L, metadata.offset());
+        produceOne(TOPIC, null, message);
+        final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
+        while (System.currentTimeMillis() < pollUntil) {
+            runner.run(1, false, false);
+        }
+
+        runner.run(1, true, false);
+        runner.assertTransferCount("success", 1);
+
+        final List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship("success");
+        assertEquals(1, flowFiles.size());
+        final MockFlowFile flowFile = flowFiles.getFirst();
+
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, TOPIC);
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(0));
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(0));
+        flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
+        flowFile.assertAttributeEquals("record.count", Long.toString(3));
+
+        final List<ProvenanceEventRecord> provenanceEvents = runner.getProvenanceEvents();
+        assertEquals(1, provenanceEvents.size());
+        final ProvenanceEventRecord provenanceEvent = provenanceEvents.getFirst();
+        assertEquals(ProvenanceEventType.RECEIVE, provenanceEvent.getEventType());
+
+        // [{"id":1,"name":"A"},{"id":2,"name":"B"},{"id":3,"name":"C"}]
+        final JsonNode jsonNodeTree = objectMapper.readTree(flowFile.getContent());
+        assertInstanceOf(ArrayNode.class, jsonNodeTree);
+        final ArrayNode arrayNode = (ArrayNode) jsonNodeTree;
+        final Iterator<JsonNode> elements = arrayNode.elements();
+        assertEquals(TEST_RECORD_COUNT, arrayNode.size());
+        while (elements.hasNext()) {
+            final JsonNode jsonNode = elements.next();
+            assertTrue(Arrays.asList(1, 2, 3).contains(jsonNode.get("id").asInt()));
+            assertTrue(Arrays.asList("A", "B", "C").contains(jsonNode.get("name").asText()));
         }
     }
 }
