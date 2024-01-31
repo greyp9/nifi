@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.AutoOffsetReset;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
@@ -33,7 +34,12 @@ import org.apache.nifi.kafka.service.api.producer.PublishContext;
 import org.apache.nifi.kafka.service.api.producer.RecordSummary;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
+import org.apache.nifi.kafka.shared.property.SecurityProtocol;
 import org.apache.nifi.reporting.InitializationException;
+import org.apache.nifi.security.util.TemporaryKeyStoreBuilder;
+import org.apache.nifi.security.util.TlsConfiguration;
+import org.apache.nifi.ssl.SSLContextService;
+import org.apache.nifi.ssl.StandardRestrictedSSLContextService;
 import org.apache.nifi.util.MockConfigurationContext;
 import org.apache.nifi.util.NoOpProcessor;
 import org.apache.nifi.util.TestRunner;
@@ -47,6 +53,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -84,6 +91,8 @@ public class Kafka3ConnectionServiceIT {
 
     private static final int POLLING_ATTEMPTS = 3;
 
+    private static TlsConfiguration tlsConfiguration;
+
     private static KafkaContainer kafkaContainer;
 
     TestRunner runner;
@@ -92,6 +101,8 @@ public class Kafka3ConnectionServiceIT {
 
     @BeforeAll
     static void startContainer() throws ExecutionException, InterruptedException, TimeoutException {
+        tlsConfiguration = new TemporaryKeyStoreBuilder().build();
+
         kafkaContainer = new KafkaContainer(DockerImageName.parse(IMAGE_NAME));
         kafkaContainer.start();
 
@@ -238,6 +249,25 @@ public class Kafka3ConnectionServiceIT {
         assertPartitionStatesFound(partitionStates);
     }
 
+    @Test
+    void testSetSslProperties() throws Exception {
+        final Map<String, String> connectionServiceProps = new HashMap<>();
+        connectionServiceProps.put(Kafka3ConnectionService.BOOTSTRAP_SERVERS.getName(), kafkaContainer.getBootstrapServers());
+        connectionServiceProps.put(Kafka3ConnectionService.SSL_CONTEXT_SERVICE.getName(), addSSLContextService(runner));
+        connectionServiceProps.put(Kafka3ConnectionService.SECURITY_PROTOCOL.getName(), SecurityProtocol.SSL.name());
+        connectionServiceProps.put(Kafka3ConnectionService.SASL_USERNAME.getName(), "user1");
+        connectionServiceProps.put(Kafka3ConnectionService.SASL_PASSWORD.getName(), "password");
+
+        final String identifier = Kafka3ConnectionService.class.getSimpleName();
+        final KafkaConnectionService connectionService = new Kafka3ConnectionService();
+        runner.addControllerService(identifier, connectionService, connectionServiceProps);
+        runner.enableControllerService(connectionService);
+
+        runner.assertValid(connectionService);
+
+        runner.disableControllerService(connectionService);
+    }
+
     private void assertPartitionStatesFound(final List<PartitionState> partitionStates) {
         assertEquals(1, partitionStates.size());
         final PartitionState partitionState = partitionStates.iterator().next();
@@ -258,5 +288,21 @@ public class Kafka3ConnectionServiceIT {
         }
 
         return consumerRecords;
+    }
+
+    private String addSSLContextService(final TestRunner runner) throws InitializationException {
+        final String identifier = SSLContextService.class.getSimpleName();
+        final SSLContextService service = new StandardRestrictedSSLContextService();
+        runner.addControllerService(identifier, service);
+
+        runner.setProperty(service, StandardRestrictedSSLContextService.KEYSTORE, tlsConfiguration.getKeystorePath());
+        runner.setProperty(service, StandardRestrictedSSLContextService.KEYSTORE_PASSWORD, tlsConfiguration.getKeystorePassword());
+        runner.setProperty(service, StandardRestrictedSSLContextService.KEYSTORE_TYPE, tlsConfiguration.getKeystoreType().getType());
+        runner.setProperty(service, StandardRestrictedSSLContextService.TRUSTSTORE, tlsConfiguration.getTruststorePath());
+        runner.setProperty(service, StandardRestrictedSSLContextService.TRUSTSTORE_PASSWORD, tlsConfiguration.getTruststorePassword());
+        runner.setProperty(service, StandardRestrictedSSLContextService.TRUSTSTORE_TYPE, tlsConfiguration.getTruststoreType().getType());
+
+        runner.enableControllerService(service);
+        return identifier;
     }
 }
