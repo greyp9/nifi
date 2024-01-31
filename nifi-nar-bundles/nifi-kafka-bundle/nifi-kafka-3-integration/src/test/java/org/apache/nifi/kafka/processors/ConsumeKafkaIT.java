@@ -16,9 +16,7 @@
  */
 package org.apache.nifi.kafka.processors;
 
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.nifi.kafka.processors.consumer.ProcessingStrategy;
 import org.apache.nifi.kafka.service.api.consumer.AutoOffsetReset;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
@@ -32,9 +30,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Iterator;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConsumeKafkaIT extends AbstractConsumeKafkaIT {
