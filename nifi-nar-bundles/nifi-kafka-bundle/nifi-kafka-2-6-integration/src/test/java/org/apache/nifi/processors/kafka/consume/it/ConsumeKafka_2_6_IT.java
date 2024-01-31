@@ -17,20 +17,20 @@
 package org.apache.nifi.processors.kafka.consume.it;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.processors.kafka.pubsub.ConsumeKafka_2_6;
+import org.apache.nifi.provenance.ProvenanceEventRecord;
+import org.apache.nifi.provenance.ProvenanceEventType;
+import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
     private static final String TEST_RECORD_KEY = "key-" + System.currentTimeMillis();
@@ -40,8 +40,6 @@ public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
 
     @Test
     public void testKafkaTestContainerProduceConsumeOne() throws ExecutionException, InterruptedException {
-        testContainerProduceOne();
-
         final TestRunner runner = TestRunners.newTestRunner(ConsumeKafka_2_6.class);
         runner.setValidateExpressionUsage(false);
         final URI uri = URI.create(kafka.getBootstrapServers());
@@ -49,18 +47,29 @@ public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         runner.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         runner.setProperty("topic", TOPIC);
         runner.setProperty("group.id", GROUP_ID);
-        runner.run();
-        runner.assertTransferCount("success", 1);
-    }
+        runner.run(1, false, true);
 
-    private void testContainerProduceOne() throws ExecutionException, InterruptedException {
-        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProperties())) {
-            final ProducerRecord<String, String> record = new ProducerRecord<>(TOPIC, TEST_RECORD_KEY, TEST_RECORD_VALUE);
-            final Future<RecordMetadata> future = producer.send(record);
-            final RecordMetadata metadata = future.get();
-            assertEquals(TOPIC, metadata.topic());
-            assertTrue(metadata.hasOffset());
-            assertEquals(0L, metadata.offset());
+        produceOne(TOPIC, TEST_RECORD_KEY, TEST_RECORD_VALUE);
+        final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
+        while (System.currentTimeMillis() < pollUntil) {
+            runner.run(1, false, false);
         }
+
+        runner.run(1, true, false);
+        runner.assertTransferCount("success", 1);
+
+        final List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship("success");
+        assertEquals(1, flowFiles.size());
+        final MockFlowFile flowFile = flowFiles.getFirst();
+
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, TOPIC);
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(0));
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(0));
+        flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
+
+        final List<ProvenanceEventRecord> provenanceEvents = runner.getProvenanceEvents();
+        assertEquals(1, provenanceEvents.size());
+        final ProvenanceEventRecord provenanceEvent = provenanceEvents.getFirst();
+        assertEquals(ProvenanceEventType.RECEIVE, provenanceEvent.getEventType());
     }
 }

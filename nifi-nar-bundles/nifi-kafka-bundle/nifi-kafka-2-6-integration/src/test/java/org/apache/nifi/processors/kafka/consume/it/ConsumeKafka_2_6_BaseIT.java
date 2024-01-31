@@ -17,7 +17,10 @@
 package org.apache.nifi.processors.kafka.consume.it;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.nifi.json.JsonRecordSetWriter;
 import org.apache.nifi.json.JsonTreeReader;
@@ -31,12 +34,17 @@ import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumeKafka_2_6_BaseIT {
     // https://docs.confluent.io/platform/current/installation/versions-interoperability.html#cp-and-apache-kafka-compatibility
-    public static final String IMAGE_NAME = "confluentinc/cp-kafka:6.1.14";  // Kafka 2.7
+    protected static final String IMAGE_NAME = "confluentinc/cp-kafka:6.1.14";  // Kafka 2.7
 
-    public static final Duration DURATION_POLL = Duration.ofMillis(1000L);
+    protected static final Duration DURATION_POLL = Duration.ofMillis(500L);
 
     protected static final KafkaContainer kafka;
 
@@ -79,5 +87,17 @@ public class ConsumeKafka_2_6_BaseIT {
         // properties.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Long.toString(maxDelayBeforeSend));
         // properties.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Long.toString(maxDelayBeforeSend));
         return properties;
+    }
+
+    protected void produceOne(final String topic, final String key, final String value)
+            throws ExecutionException, InterruptedException {
+        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProperties())) {
+            final ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+            final Future<RecordMetadata> future = producer.send(record);
+            final RecordMetadata metadata = future.get();
+            assertEquals(topic, metadata.topic());
+            assertTrue(metadata.hasOffset());
+            assertEquals(0L, metadata.offset());
+        }
     }
 }

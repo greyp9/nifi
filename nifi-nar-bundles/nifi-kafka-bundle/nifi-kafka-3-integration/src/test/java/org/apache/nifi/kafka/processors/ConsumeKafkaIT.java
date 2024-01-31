@@ -77,14 +77,12 @@ class ConsumeKafkaIT extends AbstractConsumeKafkaIT {
 
         runner.run(1, false, true);
 
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProperties())) {
-            final ProducerRecord<String, String> record = new ProducerRecord<>(topicName, null, RECORD_VALUE);
-            final Future<RecordMetadata> produced = producer.send(record);
-            final RecordMetadata metadata = produced.get();
-            assertEquals(topicName, metadata.topic());
+        produceOne(topicName, null, RECORD_VALUE);
+        final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
+        while (System.currentTimeMillis() < pollUntil) {
+            runner.run(1, false, false);
         }
 
-        runner.run(1, false, false);
         runner.run(1, true, false);
 
         final Iterator<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumeKafka.SUCCESS).iterator();

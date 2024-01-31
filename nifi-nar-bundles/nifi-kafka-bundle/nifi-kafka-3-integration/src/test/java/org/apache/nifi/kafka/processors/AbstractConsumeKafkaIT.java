@@ -16,7 +16,11 @@
  */
 package org.apache.nifi.kafka.processors;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.nifi.json.JsonRecordSetWriter;
 import org.apache.nifi.json.JsonTreeReader;
@@ -26,14 +30,23 @@ import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.serialization.RecordReaderFactory;
 import org.apache.nifi.serialization.RecordSetWriterFactory;
 import org.apache.nifi.util.TestRunner;
+import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import java.time.Duration;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class AbstractConsumeKafkaIT {
 
     protected static final String CONNECTION_SERVICE_ID = Kafka3ConnectionService.class.getSimpleName();
+
+    protected static final Duration DURATION_POLL = Duration.ofMillis(500L);
 
     protected static final KafkaContainer kafkaContainer;
 
@@ -42,6 +55,13 @@ public abstract class AbstractConsumeKafkaIT {
     static {
         kafkaContainer = new KafkaContainer(DockerImageName.parse(IMAGE_NAME));
         kafkaContainer.start();
+    }
+
+    protected static ObjectMapper objectMapper;
+
+    @BeforeAll
+    protected static void beforeAll() {
+        objectMapper = new ObjectMapper();
     }
 
     protected void addConnectionService(final TestRunner runner) throws InitializationException {
@@ -75,5 +95,17 @@ public abstract class AbstractConsumeKafkaIT {
         properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         return properties;
+    }
+
+    protected void produceOne(final String topic, final String key, final String value)
+            throws ExecutionException, InterruptedException {
+        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProperties())) {
+            final ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+            final Future<RecordMetadata> future = producer.send(record);
+            final RecordMetadata metadata = future.get();
+            assertEquals(topic, metadata.topic());
+            assertTrue(metadata.hasOffset());
+            assertEquals(0L, metadata.offset());
+        }
     }
 }
