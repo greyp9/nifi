@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.nifi.json.JsonRecordSetWriter;
 import org.apache.nifi.json.JsonTreeReader;
@@ -35,6 +36,7 @@ import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -97,10 +99,11 @@ public abstract class AbstractConsumeKafkaIT {
         return properties;
     }
 
-    protected void produceOne(final String topic, final String key, final String value)
+    protected void produceOne(final String topic, final Integer partition,
+                              final String key, final String value, final List<Header> headers)
             throws ExecutionException, InterruptedException {
         try (final KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProperties())) {
-            final ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+            final ProducerRecord<String, String> record = new ProducerRecord<>(topic, partition, key, value, headers);
             final Future<RecordMetadata> future = producer.send(record);
             final RecordMetadata metadata = future.get();
             assertEquals(topic, metadata.topic());
