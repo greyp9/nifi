@@ -19,6 +19,8 @@ package org.apache.nifi.kafka.processors;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.apache.commons.io.IOUtils;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.nifi.kafka.processors.consumer.ProcessingStrategy;
 import org.apache.nifi.kafka.service.api.consumer.AutoOffsetReset;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
@@ -83,13 +85,19 @@ class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
         runner.setProperty(ConsumeKafka.TOPIC_NAME, topicName);
         runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.RECORD.getValue());
         runner.setProperty(ConsumeKafka.AUTO_OFFSET_RESET, AutoOffsetReset.EARLIEST.getValue());
+        runner.setProperty(ConsumeKafka.HEADER_NAME_PATTERN, "a*");
 
         runner.run(1, false, true);
 
         final byte[] bytesFlowFile = IOUtils.toByteArray(Objects.requireNonNull(
                 getClass().getClassLoader().getResource(TEST_RESOURCE)));
         final String flowFileString = new String(bytesFlowFile, StandardCharsets.UTF_8).trim();
-        produceOne(topicName, null, flowFileString);
+
+        final List<Header> headers = Arrays.asList(
+                new RecordHeader("aaa", "value".getBytes(StandardCharsets.UTF_8)),
+                new RecordHeader("bbb", "value".getBytes(StandardCharsets.UTF_8)),
+                new RecordHeader("ccc", "value".getBytes(StandardCharsets.UTF_8)));
+        produceOne(topicName, 0, null, flowFileString, headers);
         final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
         while (System.currentTimeMillis() < pollUntil) {
             runner.run(1, false, false);
@@ -109,6 +117,8 @@ class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
         flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(FIRST_OFFSET));
         flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
         flowFile.assertAttributeEquals("record.count", Long.toString(TEST_RECORD_COUNT));
+        flowFile.assertAttributeEquals("aaa", "value");
+        flowFile.assertAttributeNotExists("bbb");
 
         final List<ProvenanceEventRecord> provenanceEvents = runner.getProvenanceEvents();
         assertEquals(1, provenanceEvents.size());
