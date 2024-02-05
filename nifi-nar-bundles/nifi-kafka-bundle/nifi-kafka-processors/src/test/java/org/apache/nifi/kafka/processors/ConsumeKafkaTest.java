@@ -74,7 +74,7 @@ class ConsumeKafkaTest {
         setConnectionService();
         runner.assertNotValid();
 
-        runner.setProperty(TOPIC_NAME, TEST_TOPIC_NAME);
+        runner.setProperty(ConsumeKafka.TOPICS, TEST_TOPIC_NAME);
         runner.setProperty(GROUP_ID, CONSUMER_GROUP_ID);
         runner.assertValid();
     }
@@ -87,7 +87,7 @@ class ConsumeKafkaTest {
         setConnectionService();
         when(kafkaConnectionService.getConsumerService(any())).thenReturn(kafkaConsumerService);
 
-        runner.setProperty(TOPIC_NAME, TEST_TOPIC_NAME);
+        runner.setProperty(ConsumeKafka.TOPICS, TEST_TOPIC_NAME);
         runner.setProperty(GROUP_ID, CONSUMER_GROUP_ID);
 
         final List<ConfigVerificationResult> results = processor.verify(runner.getProcessContext(), runner.getLogger(), Collections.emptyMap());
@@ -104,7 +104,7 @@ class ConsumeKafkaTest {
         when(kafkaConnectionService.getConsumerService(any())).thenReturn(kafkaConsumerService);
         setConnectionService();
 
-        runner.setProperty(TOPIC_NAME, TEST_TOPIC_NAME);
+        runner.setProperty(ConsumeKafka.TOPICS, TEST_TOPIC_NAME);
         runner.setProperty(GROUP_ID, CONSUMER_GROUP_ID);
 
         final List<ConfigVerificationResult> results = processor.verify(runner.getProcessContext(), runner.getLogger(), Collections.emptyMap());

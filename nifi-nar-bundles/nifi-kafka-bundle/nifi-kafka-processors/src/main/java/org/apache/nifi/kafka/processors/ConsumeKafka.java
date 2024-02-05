@@ -20,10 +20,12 @@ import org.apache.nifi.annotation.behavior.InputRequirement;
 import org.apache.nifi.annotation.documentation.Tags;
 import org.apache.nifi.annotation.lifecycle.OnScheduled;
 import org.apache.nifi.annotation.lifecycle.OnStopped;
+import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
+import org.apache.nifi.kafka.processors.common.KafkaUtils;
 import org.apache.nifi.kafka.processors.consumer.ProcessingStrategy;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.OffsetSummary;
@@ -64,6 +66,7 @@ import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -77,6 +80,9 @@ import static org.apache.nifi.expression.ExpressionLanguageScope.NONE;
 @InputRequirement(InputRequirement.Requirement.INPUT_FORBIDDEN)
 @Tags({"kafka", "consumer", "record"})
 public class ConsumeKafka extends AbstractProcessor implements VerifiableProcessor {
+
+    static final AllowableValue TOPIC_NAME = new AllowableValue("names", "names", "Topic is a full topic name or comma separated list of names");
+    static final AllowableValue TOPIC_PATTERN = new AllowableValue("pattern", "pattern", "Topic is a regex using the Java Pattern syntax");
 
     static final PropertyDescriptor CONNECTION_SERVICE = new PropertyDescriptor.Builder()
             .name("Kafka Connection Service")
@@ -96,13 +102,22 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .expressionLanguageSupported(NONE)
             .build();
 
-    static final PropertyDescriptor TOPIC_NAME = new PropertyDescriptor.Builder()
-            .name("Topic Name")
-            .displayName("Topic Name")
-            .description("Name of the Kafka Topic from which the Processor consumes Kafka Records")
+    static final PropertyDescriptor TOPICS = new PropertyDescriptor.Builder()
+            .name("topic")
+            .displayName("Topic Name(s)")
+            .description("The name of the Kafka Topic(s) from which the Processor consumes Kafka Records. More than one can be supplied if comma separated.")
             .required(true)
             .addValidator(StandardValidators.NON_BLANK_VALIDATOR)
-            .expressionLanguageSupported(NONE)
+            .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
+            .build();
+
+    static final PropertyDescriptor TOPIC_TYPE = new PropertyDescriptor.Builder()
+            .name("topic_type")
+            .displayName("Topic Name Format")
+            .description("Specifies whether the Topic(s) provided are a comma separated list of names or a single regular expression")
+            .required(true)
+            .allowableValues(TOPIC_NAME, TOPIC_PATTERN)
+            .defaultValue(TOPIC_NAME)
             .build();
 
     static final PropertyDescriptor RECORD_READER = new PropertyDescriptor.Builder()
@@ -166,13 +181,25 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     private static final List<PropertyDescriptor> DESCRIPTORS = List.of(
             CONNECTION_SERVICE,
             GROUP_ID,
-            TOPIC_NAME,
+            TOPICS,
+            TOPIC_TYPE,
             RECORD_READER,
             RECORD_WRITER,
             AUTO_OFFSET_RESET,
             PROCESSING_STRATEGY,
             HEADER_ENCODING,
             HEADER_NAME_PATTERN
+            //COMMIT_OFFSETS,  // to be implemented
+            //COMMS_TIMEOUT
+            //HONOR_TRANSACTIONS,
+            //KEY_ATTRIBUTE_ENCODING,
+            //KEY_FORMAT,
+            //KEY_RECORD_READER,
+            //MAX_POLL_RECORDS,
+            //MAX_UNCOMMITTED_TIME,
+            //MESSAGE_DEMARCATOR,
+            //OUTPUT_STRATEGY,
+            //SEPARATE_BY_KEY,
     );
 
     private static final Set<Relationship> RELATIONSHIPS = Collections.singleton(SUCCESS);
@@ -366,10 +393,22 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
 
     private PollingContext getPollingContext(final ProcessContext context) {
         final String groupId = context.getProperty(GROUP_ID).getValue();
-        final String topicName = context.getProperty(TOPIC_NAME).getValue();
         final String offsetReset = context.getProperty(AUTO_OFFSET_RESET).getValue();
         final AutoOffsetReset autoOffsetReset = AutoOffsetReset.valueOf(offsetReset.toUpperCase());
+        final String topics = context.getProperty(TOPICS).evaluateAttributeExpressions().getValue();
+        final String topicType = context.getProperty(TOPIC_TYPE).getValue();
 
-        return new PollingContext(groupId, Collections.singleton(topicName), autoOffsetReset);
+        final PollingContext pollingContext;
+        if (topicType.equals(TOPIC_PATTERN.getValue())) {
+            final Pattern topicPattern = Pattern.compile(topics.trim());
+            pollingContext = new PollingContext(groupId, topicPattern, autoOffsetReset);
+        } else if (topicType.equals(TOPIC_NAME.getValue())) {
+            final Collection<String> topicList = KafkaUtils.toTopicList(topics);
+            pollingContext = new PollingContext(groupId, topicList, autoOffsetReset);
+        } else {
+            getLogger().error("Subscription type has an unknown value {}", topicType);
+            return null;
+        }
+        return pollingContext;
     }
 }

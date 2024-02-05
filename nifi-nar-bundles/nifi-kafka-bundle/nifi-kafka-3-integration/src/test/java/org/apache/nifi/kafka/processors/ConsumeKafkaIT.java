@@ -40,8 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ConsumeKafkaIT extends AbstractConsumeKafkaIT {
 
-    private static final String CONSUMER_GROUP_ID = ConsumeKafkaIT.class.getName();
-
     private static final String RECORD_VALUE = ProducerRecord.class.getSimpleName();
 
     private static final int FIRST_PARTITION = 0;
@@ -56,12 +54,17 @@ class ConsumeKafkaIT extends AbstractConsumeKafkaIT {
         addConnectionService(runner);
 
         runner.setProperty(ConsumeKafka.CONNECTION_SERVICE, CONNECTION_SERVICE_ID);
-        runner.setProperty(ConsumeKafka.GROUP_ID, CONSUMER_GROUP_ID);
+        runner.setProperty(ConsumeKafka.AUTO_OFFSET_RESET, AutoOffsetReset.EARLIEST.getValue());
     }
 
     @Test
     void testProcessingStrategyFlowFileNoRecords() {
-        runner.setProperty(ConsumeKafka.TOPIC_NAME, UUID.randomUUID().toString());
+        final String topic = UUID.randomUUID().toString();
+        // reuse of group ID causes issues in test containers test environment
+        final String groupId = topic.substring(0, topic.indexOf("-"));
+
+        runner.setProperty(ConsumeKafka.GROUP_ID, groupId);
+        runner.setProperty(ConsumeKafka.TOPICS, topic);
         runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.FLOW_FILE.getValue());
 
         runner.run();
@@ -71,10 +74,12 @@ class ConsumeKafkaIT extends AbstractConsumeKafkaIT {
 
     @Test
     void testProcessingStrategyFlowFileOneRecord() throws InterruptedException, ExecutionException {
-        final String topicName = UUID.randomUUID().toString();
-        runner.setProperty(ConsumeKafka.TOPIC_NAME, topicName);
+        final String topic = UUID.randomUUID().toString();
+        final String groupId = topic.substring(0, topic.indexOf("-"));
+
+        runner.setProperty(ConsumeKafka.GROUP_ID, groupId);
+        runner.setProperty(ConsumeKafka.TOPICS, topic);
         runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.FLOW_FILE.getValue());
-        runner.setProperty(ConsumeKafka.AUTO_OFFSET_RESET, AutoOffsetReset.EARLIEST.getValue());
         runner.setProperty(ConsumeKafka.HEADER_NAME_PATTERN, "b*");
 
         runner.run(1, false, true);
@@ -83,9 +88,9 @@ class ConsumeKafkaIT extends AbstractConsumeKafkaIT {
                 new RecordHeader("aaa", "value".getBytes(StandardCharsets.UTF_8)),
                 new RecordHeader("bbb", "value".getBytes(StandardCharsets.UTF_8)),
                 new RecordHeader("ccc", "value".getBytes(StandardCharsets.UTF_8)));
-        produceOne(topicName, 0, null, RECORD_VALUE, headers);
+        produceOne(topic, 0, null, RECORD_VALUE, headers);
         final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
-        while (System.currentTimeMillis() < pollUntil) {
+        while ((System.currentTimeMillis() < pollUntil) && (runner.getFlowFilesForRelationship("success").isEmpty())) {
             runner.run(1, false, false);
         }
 
@@ -96,11 +101,67 @@ class ConsumeKafkaIT extends AbstractConsumeKafkaIT {
 
         final MockFlowFile flowFile = flowFiles.next();
         flowFile.assertContentEquals(RECORD_VALUE);
-        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, topicName);
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, topic);
         flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(FIRST_PARTITION));
         flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(FIRST_OFFSET));
         flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_HEADER_COUNT, "3");
         flowFile.assertAttributeEquals("bbb", "value");
         flowFile.assertAttributeNotExists("aaa");
+        flowFile.assertAttributeNotExists("ccc");
+    }
+
+    /**
+     * Test ability to specify a topic regular expression to query for messages.
+     */
+    @Test
+    public void testTopicPattern() throws ExecutionException, InterruptedException {
+        final String topic = UUID.randomUUID().toString();
+        final String groupId = topic.substring(0, topic.indexOf("-"));
+        final String topicTestCase = topic + "-B";
+        final String topicPattern = topic + ".*";
+
+        // on use of "pattern" subscription, things seem to work better when topic exists prior to the subscribe event
+        produceOne(topicTestCase, 0, null, RECORD_VALUE, null);
+
+        runner.setProperty(ConsumeKafka.GROUP_ID, groupId);
+        runner.setProperty(ConsumeKafka.TOPICS, topicPattern);
+        runner.setProperty(ConsumeKafka.TOPIC_TYPE, ConsumeKafka.TOPIC_PATTERN);
+        runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.FLOW_FILE.getValue());
+        runner.run(1, false, true);
+
+        final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
+        while ((System.currentTimeMillis() < pollUntil) && (runner.getFlowFilesForRelationship("success").isEmpty())) {
+            runner.run(1, false, false);
+        }
+
+        runner.run(1, true, false);
+        runner.assertTransferCount("success", 1);
+    }
+
+    /**
+     * Test ability to specify a topic regular expression to query for messages.
+     */
+    @Test
+    public void testTopicNames() throws ExecutionException, InterruptedException {
+        final String topic = UUID.randomUUID().toString();
+        final String groupId = topic.substring(0, topic.indexOf("-"));
+        final String topicTestCase = topic + "-C";
+        final String topicNames = topic + "-D," + topicTestCase;
+
+        runner.setProperty(ConsumeKafka.GROUP_ID, groupId);
+        runner.setProperty(ConsumeKafka.TOPICS, topicNames);
+        runner.setProperty(ConsumeKafka.TOPIC_TYPE, ConsumeKafka.TOPIC_NAME);
+        runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.FLOW_FILE.getValue());
+        runner.run(1, false, true);
+
+        produceOne(topicTestCase, 0, null, RECORD_VALUE, null);
+        final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
+        while ((System.currentTimeMillis() < pollUntil) && (runner.getFlowFilesForRelationship("success").isEmpty())) {
+            runner.run(1, false, false);
+        }
+
+        runner.run(1, true, false);
+        runner.assertTransferCount("success", 1);
     }
 }

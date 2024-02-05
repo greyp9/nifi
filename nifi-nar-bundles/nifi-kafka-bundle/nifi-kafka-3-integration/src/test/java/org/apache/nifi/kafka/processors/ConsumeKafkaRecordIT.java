@@ -50,8 +50,6 @@ class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
     private static final String TEST_RESOURCE = "org/apache/nifi/kafka/processors/publish/ff.json";
     private static final int TEST_RECORD_COUNT = 3;
 
-    private static final String CONSUMER_GROUP_ID = ConsumeKafkaRecordIT.class.getName();
-
     private static final int FIRST_PARTITION = 0;
 
     private static final long FIRST_OFFSET = 0;
@@ -66,12 +64,15 @@ class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
         runner.setProperty(ConsumeKafka.CONNECTION_SERVICE, CONNECTION_SERVICE_ID);
         addRecordReaderService(runner);
         addRecordWriterService(runner);
-        runner.setProperty(ConsumeKafka.GROUP_ID, CONSUMER_GROUP_ID);
     }
 
     @Test
     void testProcessingStrategyRecordNoRecords() {
-        runner.setProperty(ConsumeKafka.TOPIC_NAME, UUID.randomUUID().toString());
+        final String topic = UUID.randomUUID().toString();
+        final String groupId = topic.substring(0, topic.indexOf("-"));
+
+        runner.setProperty(ConsumeKafka.GROUP_ID, groupId);
+        runner.setProperty(ConsumeKafka.TOPICS, topic);
         runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.RECORD.getValue());
 
         runner.run();
@@ -81,8 +82,11 @@ class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
 
     @Test
     void testProcessingStrategyFlowFileOneRecord() throws InterruptedException, ExecutionException, IOException {
-        final String topicName = UUID.randomUUID().toString();
-        runner.setProperty(ConsumeKafka.TOPIC_NAME, topicName);
+        final String topic = UUID.randomUUID().toString();
+        final String groupId = topic.substring(0, topic.indexOf("-"));
+
+        runner.setProperty(ConsumeKafka.GROUP_ID, groupId);
+        runner.setProperty(ConsumeKafka.TOPICS, topic);
         runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.RECORD.getValue());
         runner.setProperty(ConsumeKafka.AUTO_OFFSET_RESET, AutoOffsetReset.EARLIEST.getValue());
         runner.setProperty(ConsumeKafka.HEADER_NAME_PATTERN, "a*");
@@ -97,7 +101,7 @@ class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
                 new RecordHeader("aaa", "value".getBytes(StandardCharsets.UTF_8)),
                 new RecordHeader("bbb", "value".getBytes(StandardCharsets.UTF_8)),
                 new RecordHeader("ccc", "value".getBytes(StandardCharsets.UTF_8)));
-        produceOne(topicName, 0, null, flowFileString, headers);
+        produceOne(topic, 0, null, flowFileString, headers);
         final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
         while (System.currentTimeMillis() < pollUntil) {
             runner.run(1, false, false);
@@ -112,13 +116,15 @@ class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
 
         final MockFlowFile flowFile = flowFiles.next();
         flowFile.assertContentEquals(flowFileString);
-        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, topicName);
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, topic);
         flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(FIRST_PARTITION));
         flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(FIRST_OFFSET));
         flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_HEADER_COUNT, "3");
         flowFile.assertAttributeEquals("record.count", Long.toString(TEST_RECORD_COUNT));
         flowFile.assertAttributeEquals("aaa", "value");
         flowFile.assertAttributeNotExists("bbb");
+        flowFile.assertAttributeNotExists("ccc");
 
         final List<ProvenanceEventRecord> provenanceEvents = runner.getProvenanceEvents();
         assertEquals(1, provenanceEvents.size());

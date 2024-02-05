@@ -46,7 +46,7 @@ public class Subscription {
     public Subscription(final String groupId, final Pattern topicPattern, final AutoOffsetReset autoOffsetReset) {
         this.groupId = Objects.requireNonNull(groupId, "Group ID required");
         this.topics = Collections.emptyList();
-        this.topicPattern = Objects.requireNonNull(topicPattern, "Topic Patten required");
+        this.topicPattern = Objects.requireNonNull(topicPattern, "Topic Pattern required");
         this.autoOffsetReset = Objects.requireNonNull(autoOffsetReset, "Auto Offset Reset required");
     }
 
@@ -105,7 +105,9 @@ public class Subscription {
 
         if (topics.size() == subscription.topics.size()) {
             if (topics.containsAll(subscription.topics)) {
-                matched = Objects.equals(topicPattern, subscription.topicPattern);
+                final String regexLeft = (topicPattern == null ? null : topicPattern.pattern());
+                final String regexRight = (subscription.topicPattern == null ? null : subscription.topicPattern.pattern());
+                matched = Objects.equals(regexLeft, regexRight);
             } else {
                 matched = false;
             }

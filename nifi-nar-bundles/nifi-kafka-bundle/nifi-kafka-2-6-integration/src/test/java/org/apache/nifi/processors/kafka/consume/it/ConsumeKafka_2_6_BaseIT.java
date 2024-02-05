@@ -44,7 +44,7 @@ public class ConsumeKafka_2_6_BaseIT {
     // https://docs.confluent.io/platform/current/installation/versions-interoperability.html#cp-and-apache-kafka-compatibility
     protected static final String IMAGE_NAME = "confluentinc/cp-kafka:6.1.14";  // Kafka 2.7
 
-    protected static final Duration DURATION_POLL = Duration.ofMillis(500L);
+    protected static final Duration DURATION_POLL = Duration.ofMillis(1000L);
 
     protected static final KafkaContainer kafka;
 
