@@ -24,10 +24,12 @@ import org.apache.nifi.provenance.ProvenanceEventType;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,21 +37,27 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
     private static final String TEST_RECORD_KEY = "key-" + System.currentTimeMillis();
     private static final String TEST_RECORD_VALUE = "value-" + System.currentTimeMillis();
-    private static final String TOPIC = ConsumeKafka_2_6_IT.class.getName();
-    private static final String GROUP_ID = ConsumeKafka_2_6_IT.class.getSimpleName();
 
-    @Test
-    public void testKafkaTestContainerProduceConsumeOne() throws ExecutionException, InterruptedException {
-        final TestRunner runner = TestRunners.newTestRunner(ConsumeKafka_2_6.class);
-        runner.setValidateExpressionUsage(false);
+    private TestRunner runner;
+
+    @BeforeEach
+    void setUp() {
+        runner = TestRunners.newTestRunner(ConsumeKafka_2_6.class);
         final URI uri = URI.create(kafka.getBootstrapServers());
         runner.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, String.format("%s:%s", uri.getHost(), uri.getPort()));
+        runner.setValidateExpressionUsage(false);
         runner.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        runner.setProperty("topic", TOPIC);
-        runner.setProperty("group.id", GROUP_ID);
+    }
+
+    @Test
+    public void testProduceConsumeOne() throws ExecutionException, InterruptedException {
+        final String topic = UUID.randomUUID().toString();
+        final String groupId = topic.substring(0, 4);
+        runner.setProperty("topic", topic);
+        runner.setProperty("group.id", groupId);
         runner.run(1, false, true);
 
-        produceOne(TOPIC, TEST_RECORD_KEY, TEST_RECORD_VALUE);
+        produceOne(topic, TEST_RECORD_KEY, TEST_RECORD_VALUE);
         final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
         while (System.currentTimeMillis() < pollUntil) {
             runner.run(1, false, false);
@@ -62,7 +70,7 @@ public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         assertEquals(1, flowFiles.size());
         final MockFlowFile flowFile = flowFiles.getFirst();
 
-        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, TOPIC);
+        flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, topic);
         flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(0));
         flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(0));
         flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
@@ -71,5 +79,55 @@ public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         assertEquals(1, provenanceEvents.size());
         final ProvenanceEventRecord provenanceEvent = provenanceEvents.getFirst();
         assertEquals(ProvenanceEventType.RECEIVE, provenanceEvent.getEventType());
+    }
+
+    /**
+     * Test ability to specify a topic regular expression to query for messages.
+     */
+    @Test
+    public void testTopicPattern() throws ExecutionException, InterruptedException {
+        final String topicBase = UUID.randomUUID().toString();
+        final String topicTestCase = topicBase + "-B";
+        final String topicPattern = topicBase + ".*";
+
+        // on use of "pattern" subscription, things seem to work better when topic exists prior to the subscribe event
+        produceOne(topicTestCase, TEST_RECORD_KEY, TEST_RECORD_VALUE);
+
+        runner.setProperty("topic", topicPattern);
+        runner.setProperty("topic_type", "pattern");
+        runner.setProperty("group.id", "B");
+        runner.run(1, false, true);
+
+        final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
+        while ((System.currentTimeMillis() < pollUntil) && (runner.getFlowFilesForRelationship("success").isEmpty())) {
+            runner.run(1, false, false);
+        }
+
+        runner.run(1, true, false);
+        runner.assertTransferCount("success", 1);
+    }
+
+    /**
+     * Test ability to specify multiple topics to query for messages.
+     */
+    @Test
+    public void testTopicNames() throws ExecutionException, InterruptedException {
+        final String topicBase = UUID.randomUUID().toString();
+        final String topicTestCase = topicBase + "-C";
+        final String topicNames = topicBase + "-D," + topicTestCase;
+
+        runner.setProperty("topic", topicNames);
+        runner.setProperty("topic_type", "names");
+        runner.setProperty("group.id", "C");
+        runner.run(1, false, true);
+
+        produceOne(topicTestCase, TEST_RECORD_KEY, TEST_RECORD_VALUE);
+        final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
+        while (System.currentTimeMillis() < pollUntil) {
+            runner.run(1, false, false);
+        }
+
+        runner.run(1, true, false);
+        runner.assertTransferCount("success", 1);
     }
 }

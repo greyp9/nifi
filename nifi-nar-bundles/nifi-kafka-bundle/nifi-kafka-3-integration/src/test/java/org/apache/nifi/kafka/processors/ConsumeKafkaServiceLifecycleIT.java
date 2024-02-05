@@ -45,7 +45,7 @@ class ConsumeKafkaServiceLifecycleIT extends AbstractConsumeKafkaIT {
      */
     @Test
     void testScheduleProcessorMultipleTimes() {
-        runner.setProperty(ConsumeKafka.TOPIC_NAME, UUID.randomUUID().toString());
+        runner.setProperty(ConsumeKafka.TOPICS, UUID.randomUUID().toString());
         runner.run();
         runner.run();
     }

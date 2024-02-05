@@ -181,6 +181,10 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             CLIENT_TIMEOUT,
             METADATA_WAIT_TIME,
             ACK_WAIT_TIME
+            //AWS_PROFILE_NAME,  // defer for now
+            //KERBEROS_SERVICE_NAME,  // defer for now
+            //SELF_CONTAINED_KERBEROS_USER_SERVICE,  // defer for now
+            //TOKEN_AUTHENTICATION,  // defer for now
     ));
 
     private static final Duration VERIFY_TIMEOUT = Duration.ofSeconds(2);

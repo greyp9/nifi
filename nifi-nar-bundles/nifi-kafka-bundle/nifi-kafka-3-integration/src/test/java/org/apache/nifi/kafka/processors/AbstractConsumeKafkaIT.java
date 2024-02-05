@@ -48,7 +48,7 @@ public abstract class AbstractConsumeKafkaIT {
 
     protected static final String CONNECTION_SERVICE_ID = Kafka3ConnectionService.class.getSimpleName();
 
-    protected static final Duration DURATION_POLL = Duration.ofMillis(500L);
+    protected static final Duration DURATION_POLL = Duration.ofMillis(1000L);
 
     protected static final KafkaContainer kafkaContainer;
 
