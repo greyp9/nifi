@@ -36,10 +36,13 @@ import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -109,6 +112,23 @@ public abstract class AbstractConsumeKafkaIT {
             assertEquals(topic, metadata.topic());
             assertTrue(metadata.hasOffset());
             assertEquals(0L, metadata.offset());
+        }
+    }
+
+    protected void produce(final String topic, final Collection<ProducerRecord<String, String>> records)
+            throws ExecutionException, InterruptedException {
+        final Collection<RecordMetadata> metadatas = new ArrayList<>();
+        try (final KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProperties())) {
+            final Collection<Future<RecordMetadata>> futures = records.stream().map(producer::send).collect(Collectors.toList());
+            for (final Future<RecordMetadata> future : futures) {
+                metadatas.add(future.get());
+            }
+            assertEquals(records.size(), futures.size());
+            assertEquals(futures.size(), metadatas.size());
+        }
+        for (RecordMetadata metadata : metadatas) {
+            assertEquals(topic, metadata.topic());
+            assertTrue(metadata.hasOffset());
         }
     }
 }
