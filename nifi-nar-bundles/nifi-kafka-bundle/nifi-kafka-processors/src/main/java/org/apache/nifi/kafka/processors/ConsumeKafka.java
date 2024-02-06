@@ -23,9 +23,12 @@ import org.apache.nifi.annotation.lifecycle.OnStopped;
 import org.apache.nifi.components.AllowableValue;
 import org.apache.nifi.components.ConfigVerificationResult;
 import org.apache.nifi.components.PropertyDescriptor;
+import org.apache.nifi.components.PropertyValue;
+import org.apache.nifi.components.Validator;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.processors.common.KafkaUtils;
+import org.apache.nifi.kafka.processors.consumer.bundle.ByteRecordBundler;
 import org.apache.nifi.kafka.processors.consumer.ProcessingStrategy;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.OffsetSummary;
@@ -146,6 +149,29 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .expressionLanguageSupported(NONE)
             .build();
 
+    static final PropertyDescriptor MESSAGE_DEMARCATOR = new PropertyDescriptor.Builder()
+            .name("message-demarcator")
+            .displayName("Message Demarcator")
+            .required(false)
+            .addValidator(Validator.VALID)
+            .expressionLanguageSupported(ExpressionLanguageScope.ENVIRONMENT)
+            .description("Since KafkaConsumer receives messages in batches, you have an option to output FlowFiles which contains "
+                    + "all Kafka messages in a single batch for a given topic and partition and this property allows you to provide a string (interpreted as UTF-8) to use "
+                    + "for demarcating apart multiple Kafka messages. This is an optional property and if not provided each Kafka message received "
+                    + "will result in a single FlowFile which  "
+                    + "time it is triggered. To enter special character such as 'new line' use CTRL+Enter or Shift+Enter depending on the OS")
+            .build();
+
+    static final PropertyDescriptor SEPARATE_BY_KEY = new PropertyDescriptor.Builder()
+            .name("separate-by-key")
+            .displayName("Separate By Key")
+            .description("If true, and the <Message Demarcator> property is set, two messages will only be added to the same FlowFile if both of the Kafka Messages have identical keys.")
+            .required(false)
+            .allowableValues("true", "false")
+            .defaultValue("false")
+            .build();
+
+
     static final PropertyDescriptor PROCESSING_STRATEGY = new PropertyDescriptor.Builder()
             .name("Processing Strategy")
             .displayName("Processing Strategy")
@@ -183,6 +209,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             GROUP_ID,
             TOPICS,
             TOPIC_TYPE,
+            MESSAGE_DEMARCATOR,
+            SEPARATE_BY_KEY,
             RECORD_READER,
             RECORD_WRITER,
             AUTO_OFFSET_RESET,
@@ -192,14 +220,12 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             //COMMIT_OFFSETS,  // to be implemented
             //COMMS_TIMEOUT
             //HONOR_TRANSACTIONS,
-            //KEY_ATTRIBUTE_ENCODING,
+            //KEY_ATTRIBUTE_ENCODING,  TODO use [KEY_ATTRIBUTE_ENCODING]
             //KEY_FORMAT,
             //KEY_RECORD_READER,
             //MAX_POLL_RECORDS,
             //MAX_UNCOMMITTED_TIME,
-            //MESSAGE_DEMARCATOR,
             //OUTPUT_STRATEGY,
-            //SEPARATE_BY_KEY,
     );
 
     private static final Set<Relationship> RELATIONSHIPS = Collections.singleton(SUCCESS);
@@ -284,13 +310,25 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     }
 
     private void processConsumerRecords(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
+        final Iterator<ByteRecord> iterator = transformDemarcator(context, consumerRecords);
         final ProcessingStrategy processingStrategy = ProcessingStrategy.valueOf(context.getProperty(PROCESSING_STRATEGY).getValue());
         if (ProcessingStrategy.FLOW_FILE == processingStrategy) {
-            processFlowFileConsumerRecords(session, pollingContext, consumerRecords);
+            processFlowFileConsumerRecords(session, pollingContext, iterator);
         } else if (ProcessingStrategy.RECORD == processingStrategy) {
-            processRecordConsumerRecords(context, session, pollingContext, consumerRecords);
+            processRecordConsumerRecords(context, session, pollingContext, iterator);
         } else {
             throw new ProcessException(String.format("Processing Strategy not supported [%s]", processingStrategy));
+        }
+    }
+
+    private Iterator<ByteRecord> transformDemarcator(final ProcessContext context, final Iterator<ByteRecord> consumerRecords) {
+        final PropertyValue propertyValueDemarcator = context.getProperty(ConsumeKafka.MESSAGE_DEMARCATOR);
+        if (propertyValueDemarcator.isSet()) {
+            final byte[] demarcator = propertyValueDemarcator.evaluateAttributeExpressions().getValue().getBytes(StandardCharsets.UTF_8);
+            final boolean separateByKey = context.getProperty(SEPARATE_BY_KEY).asBoolean();
+            return new ByteRecordBundler(demarcator, separateByKey).bundle(consumerRecords);
+        } else {
+            return consumerRecords;
         }
     }
 
@@ -373,7 +411,17 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         attributes.put(KafkaFlowFileAttribute.KAFKA_TOPIC, consumerRecord.getTopic());
         attributes.put(KafkaFlowFileAttribute.KAFKA_PARTITION, Long.toString(consumerRecord.getPartition()));
         attributes.put(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(consumerRecord.getOffset()));
+        // different way to convey this from bundler?
+        consumerRecord.getHeaders().stream()
+                .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET)).findFirst()
+                .ifPresent(h -> attributes.put(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET, new String(h.value(), StandardCharsets.UTF_8)));
+        consumerRecord.getHeaders().stream()
+                .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_COUNT)).findFirst()
+                .ifPresent(h -> attributes.put(KafkaFlowFileAttribute.KAFKA_COUNT, new String(h.value(), StandardCharsets.UTF_8)));
         attributes.put(KafkaFlowFileAttribute.KAFKA_TIMESTAMP, Long.toString(consumerRecord.getTimestamp()));
+        // TODO use [KEY_ATTRIBUTE_ENCODING]
+        consumerRecord.getKey().ifPresent(k ->
+                attributes.put(KafkaFlowFileAttribute.KAFKA_KEY, new String(k, StandardCharsets.UTF_8)));
 
         final List<RecordHeader> headers = consumerRecord.getHeaders();
         attributes.put(KafkaFlowFileAttribute.KAFKA_HEADER_COUNT, Integer.toString(headers.size()));
