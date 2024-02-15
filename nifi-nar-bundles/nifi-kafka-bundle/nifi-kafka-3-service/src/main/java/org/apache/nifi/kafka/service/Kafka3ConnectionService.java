@@ -251,6 +251,7 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
         final List<ConfigVerificationResult> results = new ArrayList<>();
 
         final Properties clientProperties = getClientProperties(configurationContext);
+        clientProperties.putAll(variables);
         try (final Admin admin = Admin.create(clientProperties)) {
             final ListTopicsResult listTopicsResult = admin.listTopics();
 
