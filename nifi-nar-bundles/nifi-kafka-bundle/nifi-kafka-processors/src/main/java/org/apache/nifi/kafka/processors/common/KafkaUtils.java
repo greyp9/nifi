@@ -16,9 +16,18 @@
  */
 package org.apache.nifi.kafka.processors.common;
 
+import org.apache.nifi.kafka.service.api.header.RecordHeader;
+import org.apache.nifi.kafka.service.api.record.ByteRecord;
+import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
+
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class KafkaUtils {
 
@@ -31,5 +40,49 @@ public class KafkaUtils {
             }
         }
         return topicList;
+    }
+
+    public static List<RecordHeader> toHeadersFiltered(final ByteRecord consumerRecord,
+                                                       final Pattern headerNamePattern) {
+        if (headerNamePattern != null) {
+            return consumerRecord.getHeaders().stream()
+                    .filter(h -> headerNamePattern.matcher(h.key()).matches())
+                    .collect(Collectors.toList());
+        } else {
+            return consumerRecord.getHeaders();
+        }
+    }
+
+    public static Map<String, String> toAttributes(final ByteRecord consumerRecord,
+                                                   final Pattern headerNamePattern, final Charset headerEncoding) {
+        final Map<String, String> attributes = new LinkedHashMap<>();
+        attributes.put(KafkaFlowFileAttribute.KAFKA_TOPIC, consumerRecord.getTopic());
+        attributes.put(KafkaFlowFileAttribute.KAFKA_PARTITION, Long.toString(consumerRecord.getPartition()));
+        attributes.put(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(consumerRecord.getOffset()));
+        // different way to convey this from bundler?
+        consumerRecord.getHeaders().stream()
+                .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET)).findFirst()
+                .ifPresent(h -> attributes.put(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET, new String(h.value(), headerEncoding)));
+        consumerRecord.getHeaders().stream()
+                .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_COUNT)).findFirst()
+                .ifPresent(h -> attributes.put(KafkaFlowFileAttribute.KAFKA_COUNT, new String(h.value(), headerEncoding)));
+        attributes.put(KafkaFlowFileAttribute.KAFKA_TIMESTAMP, Long.toString(consumerRecord.getTimestamp()));
+        consumerRecord.getKey().ifPresent(k ->
+                attributes.put(KafkaFlowFileAttribute.KAFKA_KEY, new String(k, headerEncoding)));
+
+        final List<RecordHeader> headers = consumerRecord.getHeaders();
+        attributes.put(KafkaFlowFileAttribute.KAFKA_HEADER_COUNT, Integer.toString(headers.size()));
+
+        if (headerNamePattern != null) {
+            for (final RecordHeader header : headers) {
+                final String name = header.key();
+                if (headerNamePattern.matcher(name).matches()) {
+                    final String value = new String(header.value(), headerEncoding);
+                    attributes.put(name, value);
+                }
+            }
+        }
+
+        return attributes;
     }
 }

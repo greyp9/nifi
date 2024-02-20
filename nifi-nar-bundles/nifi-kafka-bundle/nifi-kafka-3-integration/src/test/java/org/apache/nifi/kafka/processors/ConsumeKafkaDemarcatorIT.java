@@ -17,6 +17,9 @@
 package org.apache.nifi.kafka.processors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.nifi.kafka.processors.consumer.ProcessingStrategy;
 import org.apache.nifi.kafka.service.api.consumer.AutoOffsetReset;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.provenance.ProvenanceEventRecord;
@@ -29,8 +32,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
@@ -68,6 +73,8 @@ class ConsumeKafkaDemarcatorIT extends AbstractConsumeKafkaIT {
         final String groupId = topic.substring(0, topic.indexOf("-"));
         runner.setProperty(ConsumeKafka.GROUP_ID, groupId);
         runner.setProperty(ConsumeKafka.TOPICS, topic);
+        runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.DEMARCATOR);
+
         runner.setProperty("message-demarcator", "|");
         runner.setProperty("separate-by-key", Boolean.FALSE.toString());
         runner.run(1, false, true);
@@ -115,13 +122,15 @@ class ConsumeKafkaDemarcatorIT extends AbstractConsumeKafkaIT {
         runner.setProperty(ConsumeKafka.TOPICS, topic);
         runner.setProperty("message-demarcator", "|");
         runner.setProperty("separate-by-key", Boolean.TRUE.toString());
+        runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.DEMARCATOR);
         runner.run(1, false, true);
 
         final Collection<ProducerRecord<String, String>> records = new ArrayList<>();
         final String[] values = RECORD_VALUE.split(",");
         boolean key = false;
         for (String value : values) {
-            records.add(new ProducerRecord<>(topic, Boolean.toString(key), value));
+            final List<Header> headers = new ArrayList<>();
+            records.add(new ProducerRecord<>(topic, null, Boolean.toString(key), value, headers));
             key = !key;
         }
         produce(topic, records);
@@ -149,6 +158,68 @@ class ConsumeKafkaDemarcatorIT extends AbstractConsumeKafkaIT {
                 flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_COUNT, Long.toString(EXPECTED_TOKENS / 2));
             } else {
                 Assertions.fail("expected KafkaFlowFileAttribute.KAFKA_KEY");
+            }
+            flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, topic);
+            flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(0));
+            flowFile.assertAttributeExists(KafkaFlowFileAttribute.KAFKA_TIMESTAMP);
+        }
+    }
+
+    /**
+     * This configuration amalgamates multiple kafka messages into FlowFiles, keyed by a significant Kafka header.
+     */
+    @Test
+    void testConsumeDemarcatedSeparateByHeader() throws InterruptedException, ExecutionException {
+        final String topic = UUID.randomUUID().toString();
+        final String groupId = topic.substring(0, topic.indexOf("-"));
+        runner.setProperty(ConsumeKafka.GROUP_ID, groupId);
+        runner.setProperty(ConsumeKafka.TOPICS, topic);
+        runner.setProperty("message-demarcator", "|");
+        runner.setProperty("Header Name Pattern", "A.*");
+
+        runner.setProperty(ConsumeKafka.PROCESSING_STRATEGY, ProcessingStrategy.DEMARCATOR);
+        runner.run(1, false, true);
+
+        final int expectedGroupCount = 3;
+        final Collection<ProducerRecord<String, String>> records = new ArrayList<>();
+        final String[] values = RECORD_VALUE.split(",");
+        int i = 0;
+        for (String value : values) {
+            final String string = String.format("A%d", (++i % expectedGroupCount));
+            final Header header = new RecordHeader(string, string.getBytes(StandardCharsets.UTF_8));
+            records.add(new ProducerRecord<>(topic, null, (String) null, value, Collections.singletonList(header)));
+        }
+        produce(topic, records);
+
+        final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
+        while (System.currentTimeMillis() < pollUntil) {
+            runner.run(1, false, false);
+        }
+
+        runner.run(1, true, false);
+        runner.assertTransferCount("success", expectedGroupCount);  // header=A1, header=A2, header=A0
+
+        final List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship("success");
+        assertEquals(expectedGroupCount, flowFiles.size());
+        for (MockFlowFile flowFile : flowFiles) {
+
+            if ("A1".equals(flowFile.getAttribute("A1"))) {
+                assertEquals("recordA|recordD", flowFile.getContent());
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(0));
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET, Long.toString(3));
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_COUNT, Long.toString(2));
+            } else if ("A2".equals(flowFile.getAttribute("A2"))) {
+                assertEquals("recordB|recordE", flowFile.getContent());
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(1));
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET, Long.toString(4));
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_COUNT, Long.toString(2));
+            } else if ("A0".equals(flowFile.getAttribute("A0"))) {
+                assertEquals("recordC|recordF", flowFile.getContent());
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(2));
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET, Long.toString(5));
+                flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_COUNT, Long.toString(2));
+            } else {
+                Assertions.fail("expected KafkaFlowFileAttribute");
             }
             flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_TOPIC, topic);
             flowFile.assertAttributeEquals(KafkaFlowFileAttribute.KAFKA_PARTITION, Integer.toString(0));

@@ -28,8 +28,8 @@ import org.apache.nifi.components.Validator;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.processors.common.KafkaUtils;
-import org.apache.nifi.kafka.processors.consumer.bundle.ByteRecordBundler;
 import org.apache.nifi.kafka.processors.consumer.ProcessingStrategy;
+import org.apache.nifi.kafka.processors.consumer.bundle.ByteRecordBundler;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.OffsetSummary;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
@@ -39,9 +39,7 @@ import org.apache.nifi.kafka.service.api.consumer.ConsumerConfiguration;
 import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
 import org.apache.nifi.kafka.service.api.consumer.PollingContext;
 import org.apache.nifi.kafka.service.api.consumer.PollingSummary;
-import org.apache.nifi.kafka.service.api.header.RecordHeader;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
-import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -310,12 +308,15 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     }
 
     private void processConsumerRecords(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
-        final Iterator<ByteRecord> iterator = transformDemarcator(context, consumerRecords);
         final ProcessingStrategy processingStrategy = ProcessingStrategy.valueOf(context.getProperty(PROCESSING_STRATEGY).getValue());
+        // model this switch on the existing implementation at `ConsumerLease.processRecords()`
         if (ProcessingStrategy.FLOW_FILE == processingStrategy) {
-            processFlowFileConsumerRecords(session, pollingContext, iterator);
+            processInputFlowFile(session, pollingContext, consumerRecords);
+        } else if (ProcessingStrategy.DEMARCATOR == processingStrategy) {
+            final Iterator<ByteRecord> iteratorDemarcator = transformDemarcator(context, consumerRecords);
+            processInputFlowFile(session, pollingContext, iteratorDemarcator);
         } else if (ProcessingStrategy.RECORD == processingStrategy) {
-            processRecordConsumerRecords(context, session, pollingContext, iterator);
+            processInputRecords(context, session, pollingContext, consumerRecords);
         } else {
             throw new ProcessException(String.format("Processing Strategy not supported [%s]", processingStrategy));
         }
@@ -326,13 +327,13 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         if (propertyValueDemarcator.isSet()) {
             final byte[] demarcator = propertyValueDemarcator.evaluateAttributeExpressions().getValue().getBytes(StandardCharsets.UTF_8);
             final boolean separateByKey = context.getProperty(SEPARATE_BY_KEY).asBoolean();
-            return new ByteRecordBundler(demarcator, separateByKey).bundle(consumerRecords);
+            return new ByteRecordBundler(demarcator, separateByKey, headerNamePattern, headerEncoding).bundle(consumerRecords);
         } else {
             return consumerRecords;
         }
     }
 
-    private void processRecordConsumerRecords(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
+    private void processInputRecords(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
         final RecordReaderFactory readerFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
         final RecordSetWriterFactory writerFactory = context.getProperty(RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
         try {
@@ -342,7 +343,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
                 int recordCount = 0;
                 if (valueIn.length > 0) {
                     final InputStream in = new ByteArrayInputStream(valueIn);
-                    final Map<String, String> attributes = getAttributes(consumerRecord);
+                    final Map<String, String> attributes = KafkaUtils.toAttributes(consumerRecord, headerNamePattern, headerEncoding);
                     final RecordReader reader = readerFactory.createRecordReader(attributes, in, valueIn.length, getLogger());
                     FlowFile flowFile = session.create();
                     flowFile = session.putAllAttributes(flowFile, attributes);
@@ -372,7 +373,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         }
     }
 
-    private void processFlowFileConsumerRecords(final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
+    private void processInputFlowFile(final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
         final Map<TopicPartitionSummary, OffsetSummary> offsets = new LinkedHashMap<>();
 
         while (consumerRecords.hasNext()) {
@@ -382,7 +383,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             FlowFile flowFile = session.create();
             flowFile = session.write(flowFile, outputStream -> outputStream.write(value));
 
-            final Map<String, String> attributes = getAttributes(consumerRecord);
+            final Map<String, String> attributes = KafkaUtils.toAttributes(consumerRecord, headerNamePattern, headerEncoding);
             flowFile = session.putAllAttributes(flowFile, attributes);
 
             final ProvenanceReporter provenanceReporter = session.getProvenanceReporter();
@@ -404,39 +405,6 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             pollingSummary = new PollingSummary(pollingContext.getGroupId(), pollingContext.getTopics(), pollingContext.getAutoOffsetReset(), offsets);
         }
         session.commitAsync(() -> consumerService.commit(pollingSummary));
-    }
-
-    private Map<String, String> getAttributes(final ByteRecord consumerRecord) {
-        final Map<String, String> attributes = new LinkedHashMap<>();
-        attributes.put(KafkaFlowFileAttribute.KAFKA_TOPIC, consumerRecord.getTopic());
-        attributes.put(KafkaFlowFileAttribute.KAFKA_PARTITION, Long.toString(consumerRecord.getPartition()));
-        attributes.put(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(consumerRecord.getOffset()));
-        // different way to convey this from bundler?
-        consumerRecord.getHeaders().stream()
-                .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET)).findFirst()
-                .ifPresent(h -> attributes.put(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET, new String(h.value(), StandardCharsets.UTF_8)));
-        consumerRecord.getHeaders().stream()
-                .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_COUNT)).findFirst()
-                .ifPresent(h -> attributes.put(KafkaFlowFileAttribute.KAFKA_COUNT, new String(h.value(), StandardCharsets.UTF_8)));
-        attributes.put(KafkaFlowFileAttribute.KAFKA_TIMESTAMP, Long.toString(consumerRecord.getTimestamp()));
-        // TODO use [KEY_ATTRIBUTE_ENCODING]
-        consumerRecord.getKey().ifPresent(k ->
-                attributes.put(KafkaFlowFileAttribute.KAFKA_KEY, new String(k, StandardCharsets.UTF_8)));
-
-        final List<RecordHeader> headers = consumerRecord.getHeaders();
-        attributes.put(KafkaFlowFileAttribute.KAFKA_HEADER_COUNT, Integer.toString(headers.size()));
-
-        if (headerNamePattern != null) {
-            for (final RecordHeader header : headers) {
-                final String name = header.key();
-                if (headerNamePattern.matcher(name).matches()) {
-                    final String value = new String(header.value(), headerEncoding);
-                    attributes.put(name, value);
-                }
-            }
-        }
-
-        return attributes;
     }
 
     private PollingContext getPollingContext(final ProcessContext context) {

@@ -16,26 +16,34 @@
  */
 package org.apache.nifi.kafka.processors.consumer.bundle;
 
+import org.apache.nifi.kafka.processors.common.KafkaUtils;
 import org.apache.nifi.kafka.service.api.common.TopicPartitionSummary;
 import org.apache.nifi.kafka.service.api.header.RecordHeader;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class ByteRecordBundler {
     private final byte[] demarcator;
     private final boolean separateByKey;
+    private final Pattern headerNamePattern;
+    private final Charset headerEncoding;
+
     private final Map<BundleKey, BundleValue> bundles;
 
-    public ByteRecordBundler(final byte[] demarcator, final boolean separateByKey) {
+    public ByteRecordBundler(final byte[] demarcator, final boolean separateByKey,
+                             final Pattern headerNamePattern, final Charset headerEncoding) {
         this.demarcator = demarcator;
         this.separateByKey = separateByKey;
+        this.headerNamePattern = headerNamePattern;
+        this.headerEncoding = headerEncoding;
         this.bundles = new HashMap<>();
     }
 
@@ -59,9 +67,11 @@ public class ByteRecordBundler {
 
     private void update(final Map<BundleKey, BundleValue> bundles, final ByteRecord byteRecord) {
         final TopicPartitionSummary topicPartition = new TopicPartitionSummary(byteRecord.getTopic(), byteRecord.getPartition());
-        final List<RecordHeader> headers = new ArrayList<>();
+        final List<RecordHeader> headers = byteRecord.getHeaders();
+        final List<RecordHeader> headersFiltered = KafkaUtils.toHeadersFiltered(byteRecord, headerNamePattern);
         final byte[] messageKey = (separateByKey ? byteRecord.getKey().orElse(null) : null);
-        final BundleKey bundleKey = new BundleKey(topicPartition, byteRecord.getTimestamp(), headers, messageKey);
+        final Map<String, String> attributes = KafkaUtils.toAttributes(byteRecord, headerNamePattern, headerEncoding);
+        final BundleKey bundleKey = new BundleKey(topicPartition, byteRecord.getTimestamp(), headers, headersFiltered, attributes, messageKey);
         if (bundles.containsKey(bundleKey)) {
             update(bundles, byteRecord, bundleKey);
         } else {

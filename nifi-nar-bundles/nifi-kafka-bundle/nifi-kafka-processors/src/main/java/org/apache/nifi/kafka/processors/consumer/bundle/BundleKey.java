@@ -22,19 +22,28 @@ import org.apache.nifi.kafka.service.api.common.TopicPartitionSummary;
 import org.apache.nifi.kafka.service.api.header.RecordHeader;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class BundleKey {
     final TopicPartitionSummary topicPartition;
     final long timestamp;
     final List<RecordHeader> headers;
+    final List<RecordHeader> headersFiltered;
+    final Map<String, String> attributes;
     final byte[] messageKey;
 
-    public BundleKey(final TopicPartitionSummary topicPartition, final long timestamp,
-                     final List<RecordHeader> headers, final byte[] messageKey) {
+    public BundleKey(final TopicPartitionSummary topicPartition,
+                     final long timestamp,
+                     final List<RecordHeader> headers,
+                     final List<RecordHeader> headersFiltered,
+                     final Map<String, String> attributes,
+                     final byte[] messageKey) {
         this.topicPartition = Objects.requireNonNull(topicPartition);
         this.timestamp = timestamp;
         this.headers = Objects.requireNonNull(headers);
+        this.headersFiltered = Objects.requireNonNull(headersFiltered);
+        this.attributes = attributes;
         this.messageKey = messageKey;
     }
 
@@ -48,6 +57,10 @@ public class BundleKey {
 
     public List<RecordHeader> getHeaders() {
         return headers;
+    }
+
+    public Map<String, String> getAttributes() {
+        return attributes;
     }
 
     public byte[] getMessageKey() {
@@ -64,7 +77,7 @@ public class BundleKey {
 
         return new EqualsBuilder()
                 .append(topicPartition, bundleKey.topicPartition)
-                .append(headers, bundleKey.headers)
+                .append(headersFiltered, bundleKey.headersFiltered)
                 .append(messageKey, bundleKey.messageKey)
                 .isEquals();
     }
@@ -73,7 +86,7 @@ public class BundleKey {
     public int hashCode() {
         return new HashCodeBuilder(17, 37)
                 .append(topicPartition)
-                .append(headers)
+                .append(headersFiltered)
                 .append(messageKey)
                 .toHashCode();
     }

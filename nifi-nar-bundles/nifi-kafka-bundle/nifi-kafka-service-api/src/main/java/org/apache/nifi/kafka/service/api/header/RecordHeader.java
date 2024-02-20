@@ -16,6 +16,9 @@
  */
 package org.apache.nifi.kafka.service.api.header;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 /**
  * Representation of Kafka Record Header
  */
@@ -34,5 +37,20 @@ public class RecordHeader {
 
     public byte[] value() {
         return value;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RecordHeader that = (RecordHeader) o;
+        return Objects.equals(key, that.key) && Arrays.equals(value, that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = Objects.hash(key);
+        result = 31 * result + Arrays.hashCode(value);
+        return result;
     }
 }
