@@ -40,6 +40,8 @@ import org.apache.nifi.kafka.service.api.consumer.KafkaConsumerService;
 import org.apache.nifi.kafka.service.api.consumer.PollingContext;
 import org.apache.nifi.kafka.service.api.consumer.PollingSummary;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
+import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
+import org.apache.nifi.kafka.shared.property.KeyEncoding;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -147,6 +149,15 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .expressionLanguageSupported(NONE)
             .build();
 
+    static final PropertyDescriptor KEY_ATTRIBUTE_ENCODING = new PropertyDescriptor.Builder()
+            .name("key-attribute-encoding")
+            .displayName("Key Attribute Encoding")
+            .description("FlowFiles that are emitted have an attribute named '" + KafkaFlowFileAttribute.KAFKA_KEY + "'. This property dictates how the value of the attribute should be encoded.")
+            .required(true)
+            .defaultValue(KeyEncoding.UTF8)
+            .allowableValues(KeyEncoding.class)
+            .build();
+
     static final PropertyDescriptor MESSAGE_DEMARCATOR = new PropertyDescriptor.Builder()
             .name("message-demarcator")
             .displayName("Message Demarcator")
@@ -214,11 +225,11 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             AUTO_OFFSET_RESET,
             PROCESSING_STRATEGY,
             HEADER_ENCODING,
-            HEADER_NAME_PATTERN
+            HEADER_NAME_PATTERN,
+            KEY_ATTRIBUTE_ENCODING
             //COMMIT_OFFSETS,  // to be implemented
             //COMMS_TIMEOUT
             //HONOR_TRANSACTIONS,
-            //KEY_ATTRIBUTE_ENCODING,  TODO use [KEY_ATTRIBUTE_ENCODING]
             //KEY_FORMAT,
             //KEY_RECORD_READER,
             //MAX_POLL_RECORDS,
@@ -235,6 +246,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     private Charset headerEncoding;
 
     private Pattern headerNamePattern;
+
+    private KeyEncoding keyEncoding;
 
     @Override
     public List<PropertyDescriptor> getSupportedPropertyDescriptors() {
@@ -258,6 +271,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         } else {
             headerNamePattern = null;
         }
+        keyEncoding = context.getProperty(KEY_ATTRIBUTE_ENCODING).asAllowableValue(KeyEncoding.class);
     }
 
     @OnStopped
@@ -327,7 +341,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         if (propertyValueDemarcator.isSet()) {
             final byte[] demarcator = propertyValueDemarcator.evaluateAttributeExpressions().getValue().getBytes(StandardCharsets.UTF_8);
             final boolean separateByKey = context.getProperty(SEPARATE_BY_KEY).asBoolean();
-            return new ByteRecordBundler(demarcator, separateByKey, headerNamePattern, headerEncoding).bundle(consumerRecords);
+            return new ByteRecordBundler(demarcator, separateByKey, keyEncoding, headerNamePattern, headerEncoding).bundle(consumerRecords);
         } else {
             return consumerRecords;
         }
@@ -343,7 +357,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
                 int recordCount = 0;
                 if (valueIn.length > 0) {
                     final InputStream in = new ByteArrayInputStream(valueIn);
-                    final Map<String, String> attributes = KafkaUtils.toAttributes(consumerRecord, headerNamePattern, headerEncoding);
+                    final Map<String, String> attributes = KafkaUtils.toAttributes(consumerRecord, keyEncoding, headerNamePattern, headerEncoding);
                     final RecordReader reader = readerFactory.createRecordReader(attributes, in, valueIn.length, getLogger());
                     FlowFile flowFile = session.create();
                     flowFile = session.putAllAttributes(flowFile, attributes);
@@ -383,7 +397,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             FlowFile flowFile = session.create();
             flowFile = session.write(flowFile, outputStream -> outputStream.write(value));
 
-            final Map<String, String> attributes = KafkaUtils.toAttributes(consumerRecord, headerNamePattern, headerEncoding);
+            final Map<String, String> attributes = KafkaUtils.toAttributes(consumerRecord, keyEncoding, headerNamePattern, headerEncoding);
             flowFile = session.putAllAttributes(flowFile, attributes);
 
             final ProvenanceReporter provenanceReporter = session.getProvenanceReporter();

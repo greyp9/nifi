@@ -16,16 +16,20 @@
  */
 package org.apache.nifi.kafka.processors.common;
 
+import org.apache.commons.codec.binary.Hex;
 import org.apache.nifi.kafka.service.api.header.RecordHeader;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
+import org.apache.nifi.kafka.shared.property.KeyEncoding;
 
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -53,7 +57,21 @@ public class KafkaUtils {
         }
     }
 
-    public static Map<String, String> toAttributes(final ByteRecord consumerRecord,
+    private static String toKeyAttribute(final byte[] key, final KeyEncoding keyEncoding) {
+        final String keyAttributeValue;
+        if (key == null) {
+            keyAttributeValue = null;
+        } else if (KeyEncoding.HEX.equals(keyEncoding)) {
+            keyAttributeValue = Hex.encodeHexString(key);
+        } else if (KeyEncoding.UTF8.equals(keyEncoding)) {
+            keyAttributeValue = new String(key, StandardCharsets.UTF_8);
+        } else {
+            keyAttributeValue = null;
+        }
+        return keyAttributeValue;
+    }
+
+    public static Map<String, String> toAttributes(final ByteRecord consumerRecord, final KeyEncoding keyEncoding,
                                                    final Pattern headerNamePattern, final Charset headerEncoding) {
         final Map<String, String> attributes = new LinkedHashMap<>();
         attributes.put(KafkaFlowFileAttribute.KAFKA_TOPIC, consumerRecord.getTopic());
@@ -67,8 +85,8 @@ public class KafkaUtils {
                 .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_COUNT)).findFirst()
                 .ifPresent(h -> attributes.put(KafkaFlowFileAttribute.KAFKA_COUNT, new String(h.value(), headerEncoding)));
         attributes.put(KafkaFlowFileAttribute.KAFKA_TIMESTAMP, Long.toString(consumerRecord.getTimestamp()));
-        consumerRecord.getKey().ifPresent(k ->
-                attributes.put(KafkaFlowFileAttribute.KAFKA_KEY, new String(k, headerEncoding)));
+        Optional.ofNullable(toKeyAttribute(consumerRecord.getKey().orElse(null), keyEncoding))
+                .ifPresent(keyAttribute -> attributes.put(KafkaFlowFileAttribute.KAFKA_KEY, keyAttribute));
 
         final List<RecordHeader> headers = consumerRecord.getHeaders();
         attributes.put(KafkaFlowFileAttribute.KAFKA_HEADER_COUNT, Integer.toString(headers.size()));

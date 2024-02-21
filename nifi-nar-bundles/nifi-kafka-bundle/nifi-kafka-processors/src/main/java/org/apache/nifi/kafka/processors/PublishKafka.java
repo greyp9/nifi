@@ -33,7 +33,6 @@ import org.apache.nifi.kafka.processors.producer.convert.RecordWrapperStreamKafk
 import org.apache.nifi.kafka.processors.producer.header.AttributesHeadersFactory;
 import org.apache.nifi.kafka.processors.producer.header.HeadersFactory;
 import org.apache.nifi.kafka.processors.producer.key.AttributeKeyFactory;
-import org.apache.nifi.kafka.processors.producer.key.KeyEncoding;
 import org.apache.nifi.kafka.processors.producer.key.KeyFactory;
 import org.apache.nifi.kafka.processors.producer.key.MessageKeyFactory;
 import org.apache.nifi.kafka.processors.producer.wrapper.RecordMetadataStrategy;
@@ -48,6 +47,7 @@ import org.apache.nifi.kafka.service.api.record.KafkaRecord;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.kafka.shared.component.KafkaPublishComponent;
 import org.apache.nifi.kafka.shared.property.FailureStrategy;
+import org.apache.nifi.kafka.shared.property.KeyEncoding;
 import org.apache.nifi.kafka.shared.property.PublishStrategy;
 import org.apache.nifi.kafka.shared.transaction.TransactionIdSupplier;
 import org.apache.nifi.logging.ComponentLog;
