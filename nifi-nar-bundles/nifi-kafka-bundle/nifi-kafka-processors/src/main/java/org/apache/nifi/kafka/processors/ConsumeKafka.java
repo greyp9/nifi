@@ -228,7 +228,6 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             HEADER_NAME_PATTERN,
             KEY_ATTRIBUTE_ENCODING
             //COMMIT_OFFSETS,  // to be implemented
-            //HONOR_TRANSACTIONS,
             //KEY_FORMAT,
             //KEY_RECORD_READER,
             //MAX_UNCOMMITTED_TIME,

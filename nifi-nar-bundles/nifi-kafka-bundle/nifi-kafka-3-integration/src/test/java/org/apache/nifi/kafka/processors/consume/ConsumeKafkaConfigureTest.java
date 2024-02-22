@@ -23,9 +23,13 @@ import org.apache.nifi.util.TestRunner;
 import org.apache.nifi.util.TestRunners;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.lang.reflect.Field;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 class ConsumeKafkaConfigureTest {
 
@@ -48,5 +52,35 @@ class ConsumeKafkaConfigureTest {
         field.setAccessible(true);
         final Properties clientProperties = (Properties) field.get(connectionService);
         Assertions.assertEquals(CONFIG_MAX_POLL_RECORDS, clientProperties.getProperty(Kafka3ConnectionService.MAX_POLL_RECORDS.getName()));
+    }
+
+    /**
+     * Given a PropertyDescriptor value, verify the consumer configuration property.
+     */
+    public static Stream<Arguments> permutationsTransactionality() {
+        return Stream.of(
+                Arguments.arguments(Boolean.FALSE.toString(), "read_uncommitted"),
+                Arguments.arguments(Boolean.TRUE.toString(), "read_committed"),
+                Arguments.arguments(null, "read_committed")  // PropertyDescriptor default
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("permutationsTransactionality")
+    void testConfigureConsumeTransactions(final String honorTransactions, final String expectedProperty)
+            throws InitializationException, NoSuchFieldException, IllegalAccessException {
+        final Kafka3ConnectionService connectionService = new Kafka3ConnectionService();
+        final Class<?> serviceClass = connectionService.getClass();
+
+        final TestRunner runner = TestRunners.newTestRunner(ConsumeKafka.class);
+        runner.addControllerService(CONNECTION_SERVICE_ID, connectionService);
+        runner.setProperty(connectionService, Kafka3ConnectionService.BOOTSTRAP_SERVERS, CONFIG_BOOTSTRAP_SERVERS);
+        runner.setProperty(connectionService, Kafka3ConnectionService.HONOR_TRANSACTIONS, honorTransactions);
+        runner.enableControllerService(connectionService);
+
+        final Field field = serviceClass.getDeclaredField("consumerProperties");
+        field.setAccessible(true);
+        final Properties consumerProperties = (Properties) field.get(connectionService);
+        Assertions.assertEquals(expectedProperty, consumerProperties.getProperty("isolation.level"));
     }
 }

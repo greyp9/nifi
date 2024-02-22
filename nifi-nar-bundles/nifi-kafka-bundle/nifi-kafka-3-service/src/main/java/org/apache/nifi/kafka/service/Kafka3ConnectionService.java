@@ -161,6 +161,19 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             .expressionLanguageSupported(ExpressionLanguageScope.NONE)
             .build();
 
+    public static final PropertyDescriptor HONOR_TRANSACTIONS = new PropertyDescriptor.Builder()
+            .name("honor-transactions")
+            .displayName("Honor Transactions")
+            .description("Specifies whether or not NiFi should honor transactional guarantees when communicating with Kafka. If false, the Processor will use an \"isolation level\" of "
+                    + "read_uncomitted. This means that messages will be received as soon as they are written to Kafka but will be pulled, even if the producer cancels the transactions. If "
+                    + "this value is true, NiFi will not receive any messages for which the producer's transaction was canceled, but this can result in some latency since the consumer must wait "
+                    + "for the producer to finish its entire transaction instead of pulling as the messages become available.")
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
+            .allowableValues("true", "false")
+            .defaultValue("true")
+            .required(true)
+            .build();
+
     public static final PropertyDescriptor METADATA_WAIT_TIME = new PropertyDescriptor.Builder()
             .name("max.block.ms")
             .displayName("Max Metadata Wait Time")
@@ -192,6 +205,7 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             SSL_CONTEXT_SERVICE,
             MAX_POLL_RECORDS,
             CLIENT_TIMEOUT,
+            HONOR_TRANSACTIONS,
             METADATA_WAIT_TIME,
             ACK_WAIT_TIME
             //AWS_PROFILE_NAME,  // defer for now
@@ -208,6 +222,8 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
 
     private Properties clientProperties;
 
+    private Properties consumerProperties;
+
     private ServiceConfiguration serviceConfiguration;
 
     private Kafka3ConsumerService consumerService;
@@ -215,8 +231,9 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
     @OnEnabled
     public void onEnabled(final ConfigurationContext configurationContext) {
         clientProperties = getClientProperties(configurationContext);
+        consumerProperties = getConsumerProperties(configurationContext, clientProperties);
         serviceConfiguration = getServiceConfiguration(configurationContext);
-        consumerService = new Kafka3ConsumerService(getLogger(), clientProperties);
+        consumerService = new Kafka3ConsumerService(getLogger(), consumerProperties);
     }
 
     @OnDisabled
@@ -290,6 +307,21 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
         }
 
         return results;
+    }
+
+    private Properties getConsumerProperties(final PropertyContext propertyContext, final Properties defaultProperties) {
+        final Properties properties = new Properties();
+        properties.putAll(defaultProperties);
+
+        // since config for ConsumerPool is locked in at ControllerService.enable(),
+        final boolean honorTransactions = propertyContext.getProperty(HONOR_TRANSACTIONS).asBoolean();
+        if (honorTransactions) {
+            properties.put("isolation.level", "read_committed");
+        } else {
+            properties.put("isolation.level", "read_uncommitted");
+        }
+
+        return properties;
     }
 
     private Properties getClientProperties(final PropertyContext propertyContext) {
