@@ -73,6 +73,7 @@ public abstract class AbstractConsumeKafkaIT {
         final KafkaConnectionService connectionService = new Kafka3ConnectionService();
         runner.addControllerService(CONNECTION_SERVICE_ID, connectionService);
         runner.setProperty(connectionService, Kafka3ConnectionService.BOOTSTRAP_SERVERS, kafkaContainer.getBootstrapServers());
+        runner.setProperty(connectionService, Kafka3ConnectionService.MAX_POLL_RECORDS, "1000");
         runner.enableControllerService(connectionService);
     }
 

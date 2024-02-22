@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.TopicListing;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -44,6 +45,8 @@ import org.apache.nifi.kafka.service.api.producer.ProducerConfiguration;
 import org.apache.nifi.kafka.service.consumer.Kafka3ConsumerService;
 import org.apache.nifi.kafka.service.producer.Kafka3ProducerService;
 import org.apache.nifi.kafka.shared.property.SaslMechanism;
+import org.apache.nifi.kafka.shared.property.provider.KafkaPropertyProvider;
+import org.apache.nifi.kafka.shared.property.provider.StandardKafkaPropertyProvider;
 import org.apache.nifi.kafka.shared.transaction.TransactionIdSupplier;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.util.StandardValidators;
@@ -139,6 +142,15 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             .identifiesControllerService(SSLContextService.class)
             .build();
 
+    public static final PropertyDescriptor MAX_POLL_RECORDS = new PropertyDescriptor.Builder()
+            .name("max.poll.records")
+            .displayName("Max Poll Records")
+            .description("Specifies the maximum number of records Kafka should return in a single poll.")
+            .required(false)
+            .defaultValue("10000")
+            .addValidator(StandardValidators.POSITIVE_INTEGER_VALIDATOR)
+            .build();
+
     public static final PropertyDescriptor CLIENT_TIMEOUT = new PropertyDescriptor.Builder()
             .name("default.api.timeout.ms")
             .displayName("Client Timeout")
@@ -178,6 +190,7 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
             SASL_USERNAME,
             SASL_PASSWORD,
             SSL_CONTEXT_SERVICE,
+            MAX_POLL_RECORDS,
             CLIENT_TIMEOUT,
             METADATA_WAIT_TIME,
             ACK_WAIT_TIME
@@ -281,6 +294,10 @@ public class Kafka3ConnectionService extends AbstractControllerService implement
 
     private Properties getClientProperties(final PropertyContext propertyContext) {
         final Properties properties = new Properties();
+
+        final KafkaPropertyProvider propertyProvider = new StandardKafkaPropertyProvider(ConsumerConfig.class);
+        final Map<String, Object> propertiesProvider = propertyProvider.getProperties(propertyContext);
+        propertiesProvider.forEach((key, value) -> properties.setProperty(key, value.toString()));
 
         final String configuredBootstrapServers = propertyContext.getProperty(BOOTSTRAP_SERVERS).getValue();
         properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, configuredBootstrapServers);

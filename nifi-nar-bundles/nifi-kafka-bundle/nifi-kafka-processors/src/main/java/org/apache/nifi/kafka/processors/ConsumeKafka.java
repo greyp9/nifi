@@ -232,7 +232,6 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             //HONOR_TRANSACTIONS,
             //KEY_FORMAT,
             //KEY_RECORD_READER,
-            //MAX_POLL_RECORDS,
             //MAX_UNCOMMITTED_TIME,
             //OUTPUT_STRATEGY,
     );
