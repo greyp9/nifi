@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ConsumeKafkaRecordIT extends ConsumeKafkaBaseIT {
+class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
     private static final String TEST_RESOURCE = "org/apache/nifi/kafka/processors/publish/ff.json";
     private static final int TEST_RECORD_COUNT = 3;
 

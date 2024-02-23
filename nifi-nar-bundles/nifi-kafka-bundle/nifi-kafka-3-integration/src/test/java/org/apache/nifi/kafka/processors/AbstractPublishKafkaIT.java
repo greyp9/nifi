@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 
 import java.util.Properties;
 
-public abstract class PublishKafkaBaseIT extends AbstractKafkaBaseIT {
+public abstract class AbstractPublishKafkaIT extends AbstractKafkaBaseIT {
 
     protected Properties getKafkaConsumerProperties() {
         final Properties properties = new Properties();

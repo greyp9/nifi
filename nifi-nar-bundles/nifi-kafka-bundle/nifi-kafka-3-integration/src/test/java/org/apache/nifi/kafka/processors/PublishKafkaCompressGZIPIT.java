@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 @TestMethodOrder(MethodOrderer.MethodName.class)
-public class PublishKafkaCompressGZIPIT extends PublishKafkaBaseIT {
+public class PublishKafkaCompressGZIPIT extends AbstractPublishKafkaIT {
     private static final String TEST_RECORD_VALUE = StringUtils.repeat("value-" + System.currentTimeMillis(), 1000);
 
     @Test

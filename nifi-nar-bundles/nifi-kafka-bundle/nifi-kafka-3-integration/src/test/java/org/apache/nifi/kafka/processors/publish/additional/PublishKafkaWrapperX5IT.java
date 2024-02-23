@@ -29,7 +29,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.nifi.kafka.processors.PublishKafka;
-import org.apache.nifi.kafka.processors.PublishKafkaBaseIT;
+import org.apache.nifi.kafka.processors.AbstractPublishKafkaIT;
 import org.apache.nifi.kafka.processors.producer.wrapper.RecordMetadataStrategy;
 import org.apache.nifi.kafka.shared.property.PublishStrategy;
 import org.apache.nifi.reporting.InitializationException;
@@ -59,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @TestMethodOrder(MethodOrderer.MethodName.class)
-public class PublishKafkaWrapperX5IT extends PublishKafkaBaseIT {
+public class PublishKafkaWrapperX5IT extends AbstractPublishKafkaIT {
     private static final String TEST_TOPIC = "nifi-" + PublishKafkaWrapperX5IT.class.getName();
     private static final String OVERRIDE_TOPIC = "topic1-" + PublishKafkaWrapperX5IT.class.getName();
     private static final Integer TEST_PARTITION = new Random().nextInt(3) - 1;
@@ -69,7 +69,7 @@ public class PublishKafkaWrapperX5IT extends PublishKafkaBaseIT {
 
     @BeforeAll
     protected static void beforeAll() {
-        PublishKafkaBaseIT.beforeAll();
+        AbstractPublishKafkaIT.beforeAll();
 
         final Properties properties = new Properties();
         properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());

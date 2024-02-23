@@ -44,7 +44,7 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ConsumeKafkaDemarcatorIT extends ConsumeKafkaBaseIT {
+class ConsumeKafkaDemarcatorIT extends AbstractConsumeKafkaIT {
 
     private static final String RECORD_VALUE = "recordA,recordB,recordC,recordD,recordE,recordF";
     private static final int EXPECTED_TOKENS = 6;

@@ -38,7 +38,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ConsumeKafkaIT extends ConsumeKafkaBaseIT {
+class ConsumeKafkaIT extends AbstractConsumeKafkaIT {
 
     private static final String RECORD_VALUE = ProducerRecord.class.getSimpleName();
 

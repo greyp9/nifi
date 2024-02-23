@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @TestMethodOrder(MethodOrderer.MethodName.class)
-public class PublishKafkaWrapperRecordIT extends PublishKafkaBaseIT {
+public class PublishKafkaWrapperRecordIT extends AbstractPublishKafkaIT {
     private static final String TEST_RESOURCE = "org/apache/nifi/kafka/processors/publish/ffwrapper.json";
 
     private static final String KEY_ATTRIBUTE_KEY = "keyAttribute";

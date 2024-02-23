@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
-class ConsumeKafkaServiceLifecycleIT extends ConsumeKafkaBaseIT {
+class ConsumeKafkaServiceLifecycleIT extends AbstractConsumeKafkaIT {
 
     private static final String CONSUMER_GROUP_ID = ConsumeKafkaIT.class.getName();
 

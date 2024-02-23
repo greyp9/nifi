@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 @TestMethodOrder(MethodOrderer.MethodName.class)
-public class PublishKafkaDelimitedIT extends PublishKafkaBaseIT {
+public class PublishKafkaDelimitedIT extends AbstractPublishKafkaIT {
     private static final String TEST_RECORD_VALUE = "value-" + System.currentTimeMillis();
 
     private static final int TEST_RECORD_COUNT = 3;

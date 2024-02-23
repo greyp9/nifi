@@ -41,7 +41,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ConsumeKafkaKeyAttributeIT extends ConsumeKafkaBaseIT {
+public class ConsumeKafkaKeyAttributeIT extends AbstractConsumeKafkaIT {
 
     private static final String RECORD_KEY = ConsumeKafkaKeyAttributeIT.class.getSimpleName();
     private static final String RECORD_VALUE = ConsumeKafkaKeyAttributeIT.class.getName();

@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public abstract class ConsumeKafkaBaseIT extends AbstractKafkaBaseIT {
+public abstract class AbstractConsumeKafkaIT extends AbstractKafkaBaseIT {
 
     protected Properties getKafkaProducerProperties() {
         final Properties properties = new Properties();

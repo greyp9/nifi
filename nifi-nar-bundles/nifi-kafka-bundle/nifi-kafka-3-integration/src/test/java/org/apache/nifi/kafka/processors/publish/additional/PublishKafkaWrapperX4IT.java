@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.nifi.kafka.processors.PublishKafka;
-import org.apache.nifi.kafka.processors.PublishKafkaBaseIT;
+import org.apache.nifi.kafka.processors.AbstractPublishKafkaIT;
 import org.apache.nifi.kafka.shared.property.PublishStrategy;
 import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.util.TestRunner;
@@ -48,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @TestMethodOrder(MethodOrderer.MethodName.class)
-public class PublishKafkaWrapperX4IT extends PublishKafkaBaseIT {
+public class PublishKafkaWrapperX4IT extends AbstractPublishKafkaIT {
     private static final String TEST_RESOURCE = "org/apache/nifi/kafka/processors/publish/additional/wrapperX4.json";
 
     @Test

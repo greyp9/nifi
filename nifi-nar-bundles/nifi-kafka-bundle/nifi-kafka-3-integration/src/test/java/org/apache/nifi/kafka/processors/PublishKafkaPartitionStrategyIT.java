@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 @TestMethodOrder(MethodOrderer.MethodName.class)
-public class PublishKafkaPartitionStrategyIT extends PublishKafkaBaseIT {
+public class PublishKafkaPartitionStrategyIT extends AbstractPublishKafkaIT {
     private static final String TEST_RECORD_VALUE = "value-" + System.currentTimeMillis();
 
     @Test
