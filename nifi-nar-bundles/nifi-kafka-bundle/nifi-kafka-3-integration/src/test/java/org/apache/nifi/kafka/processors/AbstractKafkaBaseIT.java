@@ -17,6 +17,8 @@
 package org.apache.nifi.kafka.processors;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.nifi.json.JsonRecordSetWriter;
 import org.apache.nifi.json.JsonTreeReader;
 import org.apache.nifi.kafka.service.Kafka3ConnectionService;
@@ -30,6 +32,7 @@ import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import java.time.Duration;
+import java.util.Properties;
 
 public abstract class AbstractKafkaBaseIT {
 
@@ -89,5 +92,23 @@ public abstract class AbstractKafkaBaseIT {
         runner.enableControllerService(writerService);
         runner.setProperty(writerId, writerId);
         return writerId;
+    }
+
+    protected Properties getKafkaConsumerProperties() {
+        return getKafkaConsumerProperties(kafkaContainer.getBootstrapServers(), "my-group", true);
+    }
+
+    protected Properties getKafkaConsumerProperties(
+            final String bootstrapServers, final String group, final boolean enableAutoCommit) {
+        final Properties properties = new Properties();
+        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.put(ConsumerConfig.GROUP_ID_CONFIG, group);
+        properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, Boolean.toString(enableAutoCommit));
+        properties.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");
+        properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "15000");
+        properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        return properties;
     }
 }
