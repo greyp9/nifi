@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
-class ConsumeKafkaServiceLifecycleIT extends AbstractConsumeKafkaIT {
+class ConsumeKafkaServiceLifecycleIT extends ConsumeKafkaBaseIT {
 
     private static final String CONSUMER_GROUP_ID = ConsumeKafkaIT.class.getName();
 
@@ -33,7 +33,7 @@ class ConsumeKafkaServiceLifecycleIT extends AbstractConsumeKafkaIT {
     @BeforeEach
     void setRunner() throws InitializationException {
         runner = TestRunners.newTestRunner(ConsumeKafka.class);
-        addConnectionService(runner);
+        addKafkaConnectionService(runner);
 
         runner.setProperty(ConsumeKafka.CONNECTION_SERVICE, CONNECTION_SERVICE_ID);
         runner.setProperty(ConsumeKafka.GROUP_ID, CONSUMER_GROUP_ID);

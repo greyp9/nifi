@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
+class ConsumeKafkaRecordIT extends ConsumeKafkaBaseIT {
     private static final String TEST_RESOURCE = "org/apache/nifi/kafka/processors/publish/ff.json";
     private static final int TEST_RECORD_COUNT = 3;
 
@@ -59,7 +59,7 @@ class ConsumeKafkaRecordIT extends AbstractConsumeKafkaIT {
     @BeforeEach
     void setRunner() throws InitializationException {
         runner = TestRunners.newTestRunner(ConsumeKafka.class);
-        addConnectionService(runner);
+        addKafkaConnectionService(runner);
 
         runner.setProperty(ConsumeKafka.CONNECTION_SERVICE, CONNECTION_SERVICE_ID);
         addRecordReaderService(runner);

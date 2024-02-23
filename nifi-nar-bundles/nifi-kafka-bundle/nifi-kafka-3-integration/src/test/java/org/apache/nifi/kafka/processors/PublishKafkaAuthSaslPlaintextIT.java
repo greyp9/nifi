@@ -65,7 +65,7 @@ public class PublishKafkaAuthSaslPlaintextIT {
 
     @BeforeAll
     static void beforeAll() {
-        kafka = new KafkaContainer(DockerImageName.parse(PublishKafkaBaseIT.IMAGE_NAME))
+        kafka = new KafkaContainer(DockerImageName.parse(AbstractKafkaBaseIT.IMAGE_NAME))
                 .withEnv(getEnvironmentSaslPlaintext());
         kafka.start();
     }

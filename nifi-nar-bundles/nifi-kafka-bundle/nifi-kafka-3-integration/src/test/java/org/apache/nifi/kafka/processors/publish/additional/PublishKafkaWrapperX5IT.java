@@ -72,7 +72,7 @@ public class PublishKafkaWrapperX5IT extends PublishKafkaBaseIT {
         PublishKafkaBaseIT.beforeAll();
 
         final Properties properties = new Properties();
-        properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+        properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaContainer.getBootstrapServers());
         try (final Admin adminClient = Admin.create(properties)) {
             final int numPartitions = 3;
             final short replicationFactor = 1;

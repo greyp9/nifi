@@ -44,7 +44,7 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class ConsumeKafkaDemarcatorIT extends AbstractConsumeKafkaIT {
+class ConsumeKafkaDemarcatorIT extends ConsumeKafkaBaseIT {
 
     private static final String RECORD_VALUE = "recordA,recordB,recordC,recordD,recordE,recordF";
     private static final int EXPECTED_TOKENS = 6;
@@ -58,7 +58,7 @@ class ConsumeKafkaDemarcatorIT extends AbstractConsumeKafkaIT {
     @BeforeEach
     void setRunner() throws InitializationException {
         runner = TestRunners.newTestRunner(ConsumeKafka.class);
-        addConnectionService(runner);
+        addKafkaConnectionService(runner);
 
         runner.setProperty(ConsumeKafka.CONNECTION_SERVICE, CONNECTION_SERVICE_ID);
         runner.setProperty(ConsumeKafka.AUTO_OFFSET_RESET, AutoOffsetReset.EARLIEST.getValue());
