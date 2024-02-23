@@ -58,7 +58,7 @@ class ConsumeKafkaDemarcatorIT extends AbstractConsumeKafkaIT {
     @BeforeEach
     void setRunner() throws InitializationException {
         runner = TestRunners.newTestRunner(ConsumeKafka.class);
-        addConnectionService(runner);
+        addKafkaConnectionService(runner);
 
         runner.setProperty(ConsumeKafka.CONNECTION_SERVICE, CONNECTION_SERVICE_ID);
         runner.setProperty(ConsumeKafka.AUTO_OFFSET_RESET, AutoOffsetReset.EARLIEST.getValue());

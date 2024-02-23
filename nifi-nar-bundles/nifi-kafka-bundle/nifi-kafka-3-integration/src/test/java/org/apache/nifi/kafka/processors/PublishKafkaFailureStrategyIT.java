@@ -28,7 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-public class PublishKafkaFailureStrategyIT extends PublishKafkaBaseIT {
+public class PublishKafkaFailureStrategyIT extends AbstractPublishKafkaIT {
     private static final String TEST_RESOURCE = "org/apache/nifi/kafka/processors/publish/ff.not.json";
 
     @Test

@@ -33,7 +33,7 @@ class ConsumeKafkaServiceLifecycleIT extends AbstractConsumeKafkaIT {
     @BeforeEach
     void setRunner() throws InitializationException {
         runner = TestRunners.newTestRunner(ConsumeKafka.class);
-        addConnectionService(runner);
+        addKafkaConnectionService(runner);
 
         runner.setProperty(ConsumeKafka.CONNECTION_SERVICE, CONNECTION_SERVICE_ID);
         runner.setProperty(ConsumeKafka.GROUP_ID, CONSUMER_GROUP_ID);

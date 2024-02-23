@@ -17,7 +17,7 @@
 package org.apache.nifi.kafka.processors.publish;
 
 import org.apache.nifi.kafka.processors.PublishKafka;
-import org.apache.nifi.kafka.processors.PublishKafkaBaseIT;
+import org.apache.nifi.kafka.processors.AbstractPublishKafkaIT;
 import org.apache.nifi.kafka.shared.property.FailureStrategy;
 import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.util.TestRunner;
@@ -30,7 +30,7 @@ import java.util.stream.Stream;
 
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
-public class PublishKafkaMultipleFFIT extends PublishKafkaBaseIT {
+public class PublishKafkaMultipleFFIT extends AbstractPublishKafkaIT {
     private static final String TEST_RECORD_VALUE = "value-" + System.currentTimeMillis();
 
     public static Stream<Arguments> argumentsTransactionality() {

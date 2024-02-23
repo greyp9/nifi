@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * records in a FlowFile to succeed or fail as a unit.  Non-transactional sends might allow leakage of well-formatted
  * records at the beginning of a FlowFile with malformed content.
  */
-public class PublishKafkaRecordPartialHandlingIT extends PublishKafkaBaseIT {
+public class PublishKafkaRecordPartialHandlingIT extends AbstractPublishKafkaIT {
     private static final String TEST_RESOURCE = "org/apache/nifi/kafka/processors/publish/ff.partial.json";
 
     private static Stream<Arguments> publishArguments() {
