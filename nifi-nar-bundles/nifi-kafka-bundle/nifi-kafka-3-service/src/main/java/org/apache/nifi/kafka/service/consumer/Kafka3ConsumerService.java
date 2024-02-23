@@ -34,7 +34,6 @@ import org.apache.nifi.kafka.service.consumer.pool.ConsumerObjectPool;
 import org.apache.nifi.kafka.service.consumer.pool.Subscription;
 import org.apache.nifi.logging.ComponentLog;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -52,8 +51,6 @@ import java.util.stream.Collectors;
  * Kafka 3 Consumer Service implementation with Object Pooling for subscribed Kafka Consumers
  */
 public class Kafka3ConsumerService implements KafkaConsumerService {
-    private static final Duration POLL_TIMEOUT = Duration.ofMillis(250);
-
     private final ComponentLog componentLog;
 
     private final ConsumerObjectPool consumerObjectPool;
@@ -85,7 +82,7 @@ public class Kafka3ConsumerService implements KafkaConsumerService {
         final Subscription subscription = getSubscription(pollingContext);
 
         return runConsumerFunction(subscription, (consumer) -> {
-            final ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(POLL_TIMEOUT);
+            final ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(pollingContext.getMaxUncommittedTime());
             return new RecordIterable(consumerRecords);
         });
     }

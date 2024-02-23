@@ -55,6 +55,7 @@ import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.utility.MountableFile;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -221,7 +222,8 @@ public class Kafka3ConnectionServiceBaseIT {
         assertNotNull(summary);
 
         try (KafkaConsumerService consumerService = service.getConsumerService(null)) {
-            final PollingContext pollingContext = new PollingContext(GROUP_ID, Collections.singleton(TOPIC), AutoOffsetReset.EARLIEST);
+            final PollingContext pollingContext = new PollingContext(
+                    GROUP_ID, Collections.singleton(TOPIC), AutoOffsetReset.EARLIEST, Duration.ofSeconds(1));
             final Iterator<ByteRecord> consumerRecords = poll(consumerService, pollingContext);
 
             assertTrue(consumerRecords.hasNext(), "Consumer Records not found");
@@ -287,7 +289,8 @@ public class Kafka3ConnectionServiceBaseIT {
     @Test
     void testGetConsumerService() {
         final KafkaConsumerService consumerService = service.getConsumerService(null);
-        final PollingContext pollingContext = new PollingContext(GROUP_ID, Collections.singleton(TOPIC), AutoOffsetReset.EARLIEST);
+        final PollingContext pollingContext = new PollingContext(
+                GROUP_ID, Collections.singleton(TOPIC), AutoOffsetReset.EARLIEST, Duration.ofSeconds(1));
         final List<PartitionState> partitionStates = consumerService.getPartitionStates(pollingContext);
         assertPartitionStatesFound(partitionStates);
     }
