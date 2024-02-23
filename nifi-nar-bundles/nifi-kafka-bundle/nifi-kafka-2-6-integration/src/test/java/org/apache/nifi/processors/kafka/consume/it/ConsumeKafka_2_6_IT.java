@@ -28,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -57,7 +58,7 @@ public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         runner.setProperty("group.id", groupId);
         runner.run(1, false, true);
 
-        produceOne(topic, TEST_RECORD_KEY, TEST_RECORD_VALUE);
+        produceOne(topic, null, TEST_RECORD_KEY, TEST_RECORD_VALUE, Collections.emptyList());
         final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
         while (System.currentTimeMillis() < pollUntil) {
             runner.run(1, false, false);
@@ -91,7 +92,7 @@ public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         final String topicPattern = topicBase + ".*";
 
         // on use of "pattern" subscription, things seem to work better when topic exists prior to the subscribe event
-        produceOne(topicTestCase, TEST_RECORD_KEY, TEST_RECORD_VALUE);
+        produceOne(topicTestCase, null, TEST_RECORD_KEY, TEST_RECORD_VALUE, Collections.emptyList());
 
         runner.setProperty("topic", topicPattern);
         runner.setProperty("topic_type", "pattern");
@@ -121,7 +122,7 @@ public class ConsumeKafka_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         runner.setProperty("group.id", "C");
         runner.run(1, false, true);
 
-        produceOne(topicTestCase, TEST_RECORD_KEY, TEST_RECORD_VALUE);
+        produceOne(topicTestCase, null, TEST_RECORD_KEY, TEST_RECORD_VALUE, Collections.emptyList());
         final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
         while (System.currentTimeMillis() < pollUntil) {
             runner.run(1, false, false);
