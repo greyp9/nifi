@@ -65,7 +65,7 @@ public class PublishKafkaAuthSaslPlaintextIT {
 
     @BeforeAll
     static void beforeAll() {
-        kafka = new KafkaContainer(DockerImageName.parse(PublishKafkaBaseIT.IMAGE_NAME))
+        kafka = new KafkaContainer(DockerImageName.parse(AbstractKafkaBaseIT.IMAGE_NAME))
                 .withEnv(getEnvironmentSaslPlaintext());
         kafka.start();
     }
@@ -124,7 +124,7 @@ public class PublishKafkaAuthSaslPlaintextIT {
     public void test_2_KafkaTestContainerConsumeOne() {
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(getKafkaConsumerProperties())) {
             consumer.subscribe(Collections.singletonList(getClass().getName()));
-            final ConsumerRecords<String, String> records = consumer.poll(PublishKafkaBaseIT.DURATION_POLL);
+            final ConsumerRecords<String, String> records = consumer.poll(AbstractPublishKafkaIT.DURATION_POLL);
             assertEquals(1, records.count());
             final ConsumerRecord<String, String> record = records.iterator().next();
             assertNull(record.key());
