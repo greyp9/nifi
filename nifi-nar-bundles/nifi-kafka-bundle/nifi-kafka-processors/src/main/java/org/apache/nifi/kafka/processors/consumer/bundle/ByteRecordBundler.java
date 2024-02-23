@@ -37,16 +37,18 @@ public class ByteRecordBundler {
     private final KeyEncoding keyEncoding;
     private final Pattern headerNamePattern;
     private final Charset headerEncoding;
+    private final boolean commitOffsets;
 
     private final Map<BundleKey, BundleValue> bundles;
 
     public ByteRecordBundler(final byte[] demarcator, final boolean separateByKey, final KeyEncoding keyEncoding,
-                             final Pattern headerNamePattern, final Charset headerEncoding) {
+                             final Pattern headerNamePattern, final Charset headerEncoding, final boolean commitOffsets) {
         this.demarcator = demarcator;
         this.separateByKey = separateByKey;
         this.keyEncoding = keyEncoding;
         this.headerNamePattern = headerNamePattern;
         this.headerEncoding = headerEncoding;
+        this.commitOffsets = commitOffsets;
         this.bundles = new HashMap<>();
     }
 
@@ -73,7 +75,7 @@ public class ByteRecordBundler {
         final List<RecordHeader> headers = byteRecord.getHeaders();
         final List<RecordHeader> headersFiltered = KafkaUtils.toHeadersFiltered(byteRecord, headerNamePattern);
         final byte[] messageKey = (separateByKey ? byteRecord.getKey().orElse(null) : null);
-        final Map<String, String> attributes = KafkaUtils.toAttributes(byteRecord, keyEncoding, headerNamePattern, headerEncoding);
+        final Map<String, String> attributes = KafkaUtils.toAttributes(byteRecord, keyEncoding, headerNamePattern, headerEncoding, commitOffsets);
         final BundleKey bundleKey = new BundleKey(topicPartition, byteRecord.getTimestamp(), headers, headersFiltered, attributes, messageKey);
         if (bundles.containsKey(bundleKey)) {
             update(bundles, byteRecord, bundleKey);

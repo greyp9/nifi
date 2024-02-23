@@ -72,11 +72,13 @@ public class KafkaUtils {
     }
 
     public static Map<String, String> toAttributes(final ByteRecord consumerRecord, final KeyEncoding keyEncoding,
-                                                   final Pattern headerNamePattern, final Charset headerEncoding) {
+                                                   final Pattern headerNamePattern, final Charset headerEncoding,
+                                                   final boolean commitOffsets) {
         final Map<String, String> attributes = new LinkedHashMap<>();
         attributes.put(KafkaFlowFileAttribute.KAFKA_TOPIC, consumerRecord.getTopic());
         attributes.put(KafkaFlowFileAttribute.KAFKA_PARTITION, Long.toString(consumerRecord.getPartition()));
         attributes.put(KafkaFlowFileAttribute.KAFKA_OFFSET, Long.toString(consumerRecord.getOffset()));
+        attributes.put(KafkaFlowFileAttribute.KAFKA_CONSUMER_OFFSETS_COMMITTED, String.valueOf(commitOffsets));
         // different way to convey this from bundler?
         consumerRecord.getHeaders().stream()
                 .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_MAX_OFFSET)).findFirst()
