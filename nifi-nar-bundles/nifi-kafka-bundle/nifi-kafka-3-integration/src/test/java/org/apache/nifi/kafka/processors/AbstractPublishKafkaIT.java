@@ -16,10 +16,5 @@
  */
 package org.apache.nifi.kafka.processors;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.serialization.StringDeserializer;
-
-import java.util.Properties;
-
 public abstract class AbstractPublishKafkaIT extends AbstractKafkaBaseIT {
 }
