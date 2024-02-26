@@ -26,11 +26,13 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.components.PropertyValue;
 import org.apache.nifi.components.Validator;
 import org.apache.nifi.expression.ExpressionLanguageScope;
-import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.processors.common.KafkaUtils;
 import org.apache.nifi.kafka.processors.consumer.OffsetTracker;
 import org.apache.nifi.kafka.processors.consumer.ProcessingStrategy;
 import org.apache.nifi.kafka.processors.consumer.bundle.ByteRecordBundler;
+import org.apache.nifi.kafka.processors.consumer.convert.FlowFileStreamKafkaMessageConverter;
+import org.apache.nifi.kafka.processors.consumer.convert.KafkaMessageConverter;
+import org.apache.nifi.kafka.processors.consumer.convert.RecordStreamKafkaMessageConverter;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.AutoOffsetReset;
@@ -48,22 +50,10 @@ import org.apache.nifi.processor.Relationship;
 import org.apache.nifi.processor.VerifiableProcessor;
 import org.apache.nifi.processor.exception.ProcessException;
 import org.apache.nifi.processor.util.StandardValidators;
-import org.apache.nifi.provenance.ProvenanceReporter;
-import org.apache.nifi.schema.access.SchemaNotFoundException;
-import org.apache.nifi.serialization.MalformedRecordException;
-import org.apache.nifi.serialization.RecordReader;
 import org.apache.nifi.serialization.RecordReaderFactory;
-import org.apache.nifi.serialization.RecordSetWriter;
 import org.apache.nifi.serialization.RecordSetWriterFactory;
-import org.apache.nifi.serialization.record.Record;
-import org.apache.nifi.serialization.record.RecordSchema;
-import org.apache.nifi.serialization.record.RecordSet;
 import org.apache.nifi.util.StringUtils;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -231,7 +221,7 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .dependsOn(COMMIT_OFFSETS, "true")
             .build();
 
-    static final Relationship SUCCESS = new Relationship.Builder()
+    public static final Relationship SUCCESS = new Relationship.Builder()
             .name("success")
             .description("FlowFiles containing one or more serialized Kafka Records")
             .build();
@@ -259,8 +249,6 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     );
 
     private static final Set<Relationship> RELATIONSHIPS = Collections.singleton(SUCCESS);
-
-    private static final String TRANSIT_URI_FORMAT = "kafka://%s/%s";
 
     private KafkaConsumerService consumerService;
 
@@ -372,77 +360,25 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     }
 
     private void processInputRecords(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
-        final OffsetTracker offsetTracker = new OffsetTracker();
         final RecordReaderFactory readerFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
         final RecordSetWriterFactory writerFactory = context.getProperty(RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
-        try {
-            while (consumerRecords.hasNext()) {
-                final ByteRecord consumerRecord = consumerRecords.next();
-                final byte[] valueIn = consumerRecord.getValue();
-                int recordCount = 0;
-                if (valueIn.length > 0) {
-                    final InputStream in = new ByteArrayInputStream(valueIn);
-                    final Map<String, String> attributes = KafkaUtils.toAttributes(
-                            consumerRecord, keyEncoding, headerNamePattern, headerEncoding, commitOffsets);
-                    final RecordReader reader = readerFactory.createRecordReader(attributes, in, valueIn.length, getLogger());
-                    FlowFile flowFile = session.create();
-                    flowFile = session.putAllAttributes(flowFile, attributes);
-                    try (final OutputStream rawOut = session.write(flowFile)) {
-                        final RecordSet recordSet = reader.createRecordSet();
-                        final RecordSchema schema = writerFactory.getSchema(attributes, recordSet.getSchema());
-                        final RecordSetWriter writer = writerFactory.createWriter(getLogger(), schema, rawOut, attributes);
-                        Record record;
-                        writer.beginRecordSet();
-                        while ((record = recordSet.next()) != null) {
-                            ++recordCount;
-                            writer.write(record);
-                        }
-                        writer.finishRecordSet();
-                        writer.flush();
-                        final ProvenanceReporter provenanceReporter = session.getProvenanceReporter();
-                        final String transitUri = String.format(TRANSIT_URI_FORMAT, consumerRecord.getTopic(), consumerRecord.getPartition());
-                        provenanceReporter.receive(flowFile, transitUri);
-                    }
-                    flowFile = session.putAttribute(flowFile, "record.count", String.valueOf(recordCount));
-                    session.transfer(flowFile, SUCCESS);
-                    offsetTracker.update(consumerRecord);
-                }
-            }
-            if (commitOffsets) {
-                session.commitAsync(() -> consumerService.commit(offsetTracker.getPollingSummary(pollingContext)));
-            } else {
-                session.commitAsync();
-            }
-        } catch (MalformedRecordException | SchemaNotFoundException | IOException e) {
-            throw new ProcessException(e);
-        }
+        final OffsetTracker offsetTracker = new OffsetTracker();
+        final Runnable onSuccess = commitOffsets
+                ? () -> session.commitAsync(() -> consumerService.commit(offsetTracker.getPollingSummary(pollingContext)))
+                : session::commitAsync;
+        final KafkaMessageConverter converter = new RecordStreamKafkaMessageConverter(readerFactory, writerFactory,
+                headerEncoding, headerNamePattern, keyEncoding, commitOffsets, offsetTracker, onSuccess, getLogger());
+        converter.toFlowFiles(session, consumerRecords);
     }
 
     private void processInputFlowFile(final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
         final OffsetTracker offsetTracker = new OffsetTracker();
-        while (consumerRecords.hasNext()) {
-            final ByteRecord consumerRecord = consumerRecords.next();
-
-            final byte[] value = consumerRecord.getValue();
-            FlowFile flowFile = session.create();
-            flowFile = session.write(flowFile, outputStream -> outputStream.write(value));
-
-            final Map<String, String> attributes = KafkaUtils.toAttributes(
-                    consumerRecord, keyEncoding, headerNamePattern, headerEncoding, commitOffsets);
-            flowFile = session.putAllAttributes(flowFile, attributes);
-
-            final ProvenanceReporter provenanceReporter = session.getProvenanceReporter();
-            final String transitUri = String.format(TRANSIT_URI_FORMAT, consumerRecord.getTopic(), consumerRecord.getPartition());
-            provenanceReporter.receive(flowFile, transitUri);
-
-            session.transfer(flowFile, SUCCESS);
-            offsetTracker.update(consumerRecord);
-        }
-        if (commitOffsets) {
-            session.commitAsync(() -> consumerService.commit(offsetTracker.getPollingSummary(pollingContext)));
-        } else {
-            session.commitAsync();
-        }
+        final Runnable onSuccess = commitOffsets
+                ? () -> session.commitAsync(() -> consumerService.commit(offsetTracker.getPollingSummary(pollingContext)))
+                : session::commitAsync;
+        final KafkaMessageConverter converter = new FlowFileStreamKafkaMessageConverter(
+                headerEncoding, headerNamePattern, keyEncoding, commitOffsets, offsetTracker, onSuccess);
+        converter.toFlowFiles(session, consumerRecords);
     }
 
     private PollingContext getPollingContext(final ProcessContext context) {
