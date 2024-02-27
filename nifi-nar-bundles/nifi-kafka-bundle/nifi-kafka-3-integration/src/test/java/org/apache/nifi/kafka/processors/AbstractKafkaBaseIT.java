@@ -85,6 +85,15 @@ public abstract class AbstractKafkaBaseIT {
         return writerId;
     }
 
+    protected String addRecordKeyReaderService(final TestRunner runner) throws InitializationException {
+        final String readerId = "key-record-reader";
+        final RecordReaderFactory readerService = new JsonTreeReader();
+        runner.addControllerService(readerId, readerService);
+        runner.enableControllerService(readerService);
+        runner.setProperty(readerId, readerId);
+        return readerId;
+    }
+
     protected String addRecordKeyWriterService(final TestRunner runner) throws InitializationException {
         final String writerId = "record-key-writer";
         final RecordSetWriterFactory writerService = new JsonRecordSetWriter();

@@ -76,7 +76,7 @@ public class WrapperRecordTest {
 
         final WrapperRecord wrapperRecord = new WrapperRecord(
                 recordMailingAddress, STREET_ADDRESS,
-                kafkaHeaders, UTF_8, TOPIC, PARTITION, TIMESTAMP);
+                kafkaHeaders, UTF_8, TOPIC, PARTITION, 0L, TIMESTAMP);
 
         final Record recordMetadata = wrapperRecord.getAsRecord(WrapperRecord.METADATA, WrapperRecord.SCHEMA_METADATA);
         assertNotNull(recordMetadata);

@@ -33,6 +33,7 @@ import org.apache.nifi.kafka.processors.consumer.bundle.ByteRecordBundler;
 import org.apache.nifi.kafka.processors.consumer.convert.FlowFileStreamKafkaMessageConverter;
 import org.apache.nifi.kafka.processors.consumer.convert.KafkaMessageConverter;
 import org.apache.nifi.kafka.processors.consumer.convert.RecordStreamKafkaMessageConverter;
+import org.apache.nifi.kafka.processors.consumer.convert.WrapperRecordStreamKafkaMessageConverter;
 import org.apache.nifi.kafka.service.api.KafkaConnectionService;
 import org.apache.nifi.kafka.service.api.common.PartitionState;
 import org.apache.nifi.kafka.service.api.consumer.AutoOffsetReset;
@@ -42,6 +43,8 @@ import org.apache.nifi.kafka.service.api.consumer.PollingContext;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
 import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.kafka.shared.property.KeyEncoding;
+import org.apache.nifi.kafka.shared.property.KeyFormat;
+import org.apache.nifi.kafka.shared.property.OutputStrategy;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.AbstractProcessor;
 import org.apache.nifi.processor.ProcessContext;
@@ -137,15 +140,6 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .expressionLanguageSupported(NONE)
             .build();
 
-    static final PropertyDescriptor KEY_ATTRIBUTE_ENCODING = new PropertyDescriptor.Builder()
-            .name("key-attribute-encoding")
-            .displayName("Key Attribute Encoding")
-            .description("FlowFiles that are emitted have an attribute named '" + KafkaFlowFileAttribute.KAFKA_KEY + "'. This property dictates how the value of the attribute should be encoded.")
-            .required(true)
-            .defaultValue(KeyEncoding.UTF8)
-            .allowableValues(KeyEncoding.class)
-            .build();
-
     static final PropertyDescriptor MESSAGE_DEMARCATOR = new PropertyDescriptor.Builder()
             .name("message-demarcator")
             .displayName("Message Demarcator")
@@ -186,6 +180,44 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             .addValidator(StandardValidators.CHARACTER_SET_VALIDATOR)
             .defaultValue(StandardCharsets.UTF_8.name())
             .required(true)
+            .build();
+
+    static final PropertyDescriptor OUTPUT_STRATEGY = new PropertyDescriptor.Builder()
+            .name("output-strategy")
+            .displayName("Output Strategy")
+            .description("The format used to output the Kafka record into a FlowFile record.")
+            .required(true)
+            .defaultValue(OutputStrategy.USE_VALUE)
+            .allowableValues(OutputStrategy.class)
+            .build();
+
+    static final PropertyDescriptor KEY_FORMAT = new PropertyDescriptor.Builder()
+            .name("key-format")
+            .displayName("Key Format")
+            .description("Specifies how to represent the Kafka Record's Key in the output")
+            .required(true)
+            .defaultValue(KeyFormat.BYTE_ARRAY)
+            .allowableValues(KeyFormat.class)
+            .dependsOn(OUTPUT_STRATEGY, OutputStrategy.USE_WRAPPER)
+            .build();
+
+    static final PropertyDescriptor KEY_RECORD_READER = new PropertyDescriptor.Builder()
+            .name("key-record-reader")
+            .displayName("Key Record Reader")
+            .description("The Record Reader to use for parsing the Kafka Record's key into a Record")
+            .identifiesControllerService(RecordReaderFactory.class)
+            .expressionLanguageSupported(ExpressionLanguageScope.NONE)
+            .dependsOn(KEY_FORMAT, KeyFormat.RECORD)
+            .build();
+
+    static final PropertyDescriptor KEY_ATTRIBUTE_ENCODING = new PropertyDescriptor.Builder()
+            .name("key-attribute-encoding")
+            .displayName("Key Attribute Encoding")
+            .description("FlowFiles that are emitted have an attribute named '" + KafkaFlowFileAttribute.KAFKA_KEY + "'. This property dictates how the value of the attribute should be encoded.")
+            .required(true)
+            .defaultValue(KeyEncoding.UTF8)
+            .allowableValues(KeyEncoding.class)
+            .dependsOn(OUTPUT_STRATEGY, OutputStrategy.USE_VALUE)
             .build();
 
     static final PropertyDescriptor HEADER_NAME_PATTERN = new PropertyDescriptor.Builder()
@@ -241,11 +273,10 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
             HEADER_NAME_PATTERN,
             KEY_ATTRIBUTE_ENCODING,
             COMMIT_OFFSETS,
-            MAX_UNCOMMITTED_TIME
-
-            //KEY_FORMAT,
-            //KEY_RECORD_READER,
-            //OUTPUT_STRATEGY,
+            MAX_UNCOMMITTED_TIME,
+            KEY_FORMAT,
+            KEY_RECORD_READER,
+            OUTPUT_STRATEGY
     );
 
     private static final Set<Relationship> RELATIONSHIPS = Collections.singleton(SUCCESS);
@@ -257,6 +288,10 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     private Pattern headerNamePattern;
 
     private KeyEncoding keyEncoding;
+
+    private OutputStrategy outputStrategy;
+
+    private KeyFormat keyFormat;
 
     private boolean commitOffsets;
 
@@ -284,6 +319,8 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
         }
         keyEncoding = context.getProperty(KEY_ATTRIBUTE_ENCODING).asAllowableValue(KeyEncoding.class);
         commitOffsets = context.getProperty(COMMIT_OFFSETS).asBoolean();
+        outputStrategy = context.getProperty(OUTPUT_STRATEGY).asAllowableValue(OutputStrategy.class);
+        keyFormat = context.getProperty(KEY_FORMAT).asAllowableValue(KeyFormat.class);
     }
 
     @OnStopped
@@ -360,6 +397,32 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     }
 
     private void processInputRecords(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
+        if (OutputStrategy.USE_VALUE.equals(outputStrategy)) {
+            processOutputStrategyUseValue(context, session, pollingContext, consumerRecords);
+        } else if (OutputStrategy.USE_WRAPPER.equals(outputStrategy)) {
+            processOutputStrategyUseWrapper(context, session, pollingContext, consumerRecords);
+        } else {
+            throw new ProcessException(String.format("Output Strategy not supported [%s]", outputStrategy));
+        }
+    }
+
+    private void processOutputStrategyUseWrapper(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
+/*
+        final KeyFormat keyFormat = context.getProperty(KEY_FORMAT).asAllowableValue(KeyFormat.class);
+        final RecordReaderFactory keyReaderFactory = context.getProperty(KEY_RECORD_READER).asControllerService(RecordReaderFactory.class);
+*/
+        final RecordReaderFactory readerFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
+        final RecordSetWriterFactory writerFactory = context.getProperty(RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
+        final OffsetTracker offsetTracker = new OffsetTracker();
+        final Runnable onSuccess = commitOffsets
+                ? () -> session.commitAsync(() -> consumerService.commit(offsetTracker.getPollingSummary(pollingContext)))
+                : session::commitAsync;
+        final KafkaMessageConverter converter = new WrapperRecordStreamKafkaMessageConverter(readerFactory, writerFactory,
+                headerEncoding, headerNamePattern, keyEncoding, commitOffsets, offsetTracker, onSuccess, getLogger());
+        converter.toFlowFiles(session, consumerRecords);
+    }
+
+    private void processOutputStrategyUseValue(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
         final RecordReaderFactory readerFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
         final RecordSetWriterFactory writerFactory = context.getProperty(RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
         final OffsetTracker offsetTracker = new OffsetTracker();

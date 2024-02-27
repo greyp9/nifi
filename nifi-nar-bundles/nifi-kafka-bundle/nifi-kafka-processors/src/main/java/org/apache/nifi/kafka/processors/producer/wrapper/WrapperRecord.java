@@ -38,6 +38,7 @@ public class WrapperRecord extends MapRecord {
 
     public static final String TOPIC = "topic";
     public static final String PARTITION = "partition";
+    public static final String OFFSET = "offset";
     public static final String TIMESTAMP = "timestamp";
 
     public static final String METADATA = "metadata";
@@ -47,8 +48,9 @@ public class WrapperRecord extends MapRecord {
 
     private static final RecordField FIELD_TOPIC = new RecordField(TOPIC, RecordFieldType.STRING.getDataType());
     private static final RecordField FIELD_PARTITION = new RecordField(PARTITION, RecordFieldType.INT.getDataType());
+    private static final RecordField FIELD_OFFSET = new RecordField(OFFSET, RecordFieldType.LONG.getDataType());
     private static final RecordField FIELD_TIMESTAMP = new RecordField(TIMESTAMP, RecordFieldType.TIMESTAMP.getDataType());
-    public static final RecordSchema SCHEMA_METADATA = new SimpleRecordSchema(Arrays.asList(FIELD_TOPIC, FIELD_PARTITION, FIELD_TIMESTAMP));
+    public static final RecordSchema SCHEMA_METADATA = new SimpleRecordSchema(Arrays.asList(FIELD_TOPIC, FIELD_PARTITION, FIELD_OFFSET, FIELD_TIMESTAMP));
 
     public static final RecordField FIELD_METADATA = new RecordField(METADATA, RecordFieldType.RECORD.getRecordDataType(SCHEMA_METADATA));
     public static final RecordField FIELD_HEADERS = new RecordField(HEADERS, RecordFieldType.MAP.getMapDataType(RecordFieldType.STRING.getDataType()));
@@ -63,10 +65,11 @@ public class WrapperRecord extends MapRecord {
 
     private static Map<String, Object> toValues(
             final Record record, final List<RecordHeader> headers, final Charset headerCharset,
-            final String messageKeyField, final String topic, final int partition, final long timestamp) {
+            final String messageKeyField, final String topic, final int partition, final long offset, final long timestamp) {
         final Map<String, Object> valuesMetadata = new HashMap<>();
         valuesMetadata.put(TOPIC, topic);
         valuesMetadata.put(PARTITION, partition);
+        valuesMetadata.put(OFFSET, offset);
         valuesMetadata.put(TIMESTAMP, timestamp);
         final Record recordMetadata = new MapRecord(SCHEMA_METADATA, valuesMetadata);
 
@@ -85,8 +88,19 @@ public class WrapperRecord extends MapRecord {
 
     public WrapperRecord(final Record record, final String messageKeyField,
                          final List<RecordHeader> headers, final Charset headerCharset,
-                         final String topic, final int partition, final long timestamp) {
+                         final String topic, final int partition, final long offset, final long timestamp) {
         super(toRecordSchema(record, messageKeyField),
-                toValues(record, headers, headerCharset, messageKeyField, topic, partition, timestamp));
+                toValues(record, headers, headerCharset, messageKeyField, topic, partition, offset, timestamp));
+    }
+
+    public static RecordSchema toWrapperSchema(/*final RecordSchema recordKeySchema,*/ final RecordSchema recordSchema) {
+/*
+        final Record recordKey = (Record) record.getValue(messageKeyField);
+        final RecordSchema recordSchema = ((recordKey == null) ? null : recordKey.getSchema());
+        final RecordField fieldKey = new RecordField(KEY, RecordFieldType.RECORD.getRecordDataType(recordKeySchema));
+*/
+        final RecordField fieldKey = new RecordField(KEY, RecordFieldType.STRING.getDataType());
+        final RecordField fieldValue = new RecordField(VALUE, RecordFieldType.RECORD.getRecordDataType(recordSchema));
+        return new SimpleRecordSchema(Arrays.asList(FIELD_METADATA, FIELD_HEADERS, fieldKey, fieldValue));
     }
 }
