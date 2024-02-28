@@ -15,6 +15,6 @@
 
 # Generate Jacoco Report
 - terminal command
-  - `/nifi/nifi-nar-bundles/nifi-kafka-bundle % mvn clean test integration-test verify`
+  - `/nifi/nifi-nar-bundles/nifi-kafka-bundle % mvn clean test verify -P integration-tests -P integration-tests-ci`
 - output written to
   - `nifi/nifi-nar-bundles/nifi-kafka-bundle/nifi-kafka-jacoco/target/site/jacoco-aggregate/index.html`
