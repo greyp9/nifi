@@ -57,7 +57,7 @@ public class KafkaUtils {
         }
     }
 
-    private static String toKeyAttribute(final byte[] key, final KeyEncoding keyEncoding) {
+    public static String toKeyString(final byte[] key, final KeyEncoding keyEncoding) {
         final String keyAttributeValue;
         if (key == null) {
             keyAttributeValue = null;
@@ -87,7 +87,7 @@ public class KafkaUtils {
                 .filter(h -> h.key().equals(KafkaFlowFileAttribute.KAFKA_COUNT)).findFirst()
                 .ifPresent(h -> attributes.put(KafkaFlowFileAttribute.KAFKA_COUNT, new String(h.value(), headerEncoding)));
         attributes.put(KafkaFlowFileAttribute.KAFKA_TIMESTAMP, Long.toString(consumerRecord.getTimestamp()));
-        Optional.ofNullable(toKeyAttribute(consumerRecord.getKey().orElse(null), keyEncoding))
+        Optional.ofNullable(toKeyString(consumerRecord.getKey().orElse(null), keyEncoding))
                 .ifPresent(keyAttribute -> attributes.put(KafkaFlowFileAttribute.KAFKA_KEY, keyAttribute));
 
         final List<RecordHeader> headers = consumerRecord.getHeaders();

@@ -93,13 +93,7 @@ public class WrapperRecord extends MapRecord {
                 toValues(record, headers, headerCharset, messageKeyField, topic, partition, offset, timestamp));
     }
 
-    public static RecordSchema toWrapperSchema(/*final RecordSchema recordKeySchema,*/ final RecordSchema recordSchema) {
-/*
-        final Record recordKey = (Record) record.getValue(messageKeyField);
-        final RecordSchema recordSchema = ((recordKey == null) ? null : recordKey.getSchema());
-        final RecordField fieldKey = new RecordField(KEY, RecordFieldType.RECORD.getRecordDataType(recordKeySchema));
-*/
-        final RecordField fieldKey = new RecordField(KEY, RecordFieldType.STRING.getDataType());
+    public static RecordSchema toWrapperSchema(final RecordField fieldKey, final RecordSchema recordSchema) {
         final RecordField fieldValue = new RecordField(VALUE, RecordFieldType.RECORD.getRecordDataType(recordSchema));
         return new SimpleRecordSchema(Arrays.asList(FIELD_METADATA, FIELD_HEADERS, fieldKey, fieldValue));
     }

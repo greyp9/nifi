@@ -20,9 +20,12 @@ import org.apache.nifi.flowfile.FlowFile;
 import org.apache.nifi.kafka.processors.ConsumeKafka;
 import org.apache.nifi.kafka.processors.common.KafkaUtils;
 import org.apache.nifi.kafka.processors.consumer.OffsetTracker;
+import org.apache.nifi.kafka.processors.consumer.wrapper.ConsumeWrapperRecord;
+import org.apache.nifi.kafka.processors.consumer.wrapper.WrapperRecordKeyReader;
 import org.apache.nifi.kafka.processors.producer.wrapper.WrapperRecord;
 import org.apache.nifi.kafka.service.api.record.ByteRecord;
 import org.apache.nifi.kafka.shared.property.KeyEncoding;
+import org.apache.nifi.kafka.shared.property.KeyFormat;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.processor.ProcessSession;
 import org.apache.nifi.processor.exception.ProcessException;
@@ -33,9 +36,12 @@ import org.apache.nifi.serialization.RecordReader;
 import org.apache.nifi.serialization.RecordReaderFactory;
 import org.apache.nifi.serialization.RecordSetWriter;
 import org.apache.nifi.serialization.RecordSetWriterFactory;
+import org.apache.nifi.serialization.record.MapRecord;
 import org.apache.nifi.serialization.record.Record;
+import org.apache.nifi.serialization.record.RecordField;
 import org.apache.nifi.serialization.record.RecordSchema;
 import org.apache.nifi.serialization.record.RecordSet;
+import org.apache.nifi.util.Tuple;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -49,8 +55,10 @@ import java.util.regex.Pattern;
 public class WrapperRecordStreamKafkaMessageConverter implements KafkaMessageConverter {
     private final RecordReaderFactory readerFactory;
     private final RecordSetWriterFactory writerFactory;
+    private final RecordReaderFactory keyReaderFactory;
     private final Charset headerEncoding;
     private final Pattern headerNamePattern;
+    private final KeyFormat keyFormat;
     private final KeyEncoding keyEncoding;
     private final boolean commitOffsets;
     private final OffsetTracker offsetTracker;
@@ -60,8 +68,10 @@ public class WrapperRecordStreamKafkaMessageConverter implements KafkaMessageCon
     public WrapperRecordStreamKafkaMessageConverter(
             final RecordReaderFactory readerFactory,
             final RecordSetWriterFactory writerFactory,
+            final RecordReaderFactory keyReaderFactory,
             final Charset headerEncoding,
             final Pattern headerNamePattern,
+            final KeyFormat keyFormat,
             final KeyEncoding keyEncoding,
             final boolean commitOffsets,
             final OffsetTracker offsetTracker,
@@ -69,8 +79,10 @@ public class WrapperRecordStreamKafkaMessageConverter implements KafkaMessageCon
             final ComponentLog logger) {
         this.readerFactory = readerFactory;
         this.writerFactory = writerFactory;
+        this.keyReaderFactory = keyReaderFactory;
         this.headerEncoding = headerEncoding;
         this.headerNamePattern = headerNamePattern;
+        this.keyFormat = keyFormat;
         this.keyEncoding = keyEncoding;
         this.commitOffsets = commitOffsets;
         this.offsetTracker = offsetTracker;
@@ -84,13 +96,19 @@ public class WrapperRecordStreamKafkaMessageConverter implements KafkaMessageCon
         try {
             while (consumerRecords.hasNext()) {
                 final ByteRecord consumerRecord = consumerRecords.next();
-                final byte[] valueIn = consumerRecord.getValue();
-                if (valueIn.length > 0) {
-                    final InputStream in = new ByteArrayInputStream(valueIn);
+                final byte[] value = consumerRecord.getValue();
+                if (value.length > 0) {
+                    final InputStream in = new ByteArrayInputStream(value);
                     final Map<String, String> attributes = KafkaUtils.toAttributes(
                             consumerRecord, keyEncoding, headerNamePattern, headerEncoding, commitOffsets);
-                    final RecordReader reader = readerFactory.createRecordReader(attributes, in, valueIn.length, logger);
-                    toFlowFile(session, attributes, reader, consumerRecord);
+
+                    final WrapperRecordKeyReader keyReader = new WrapperRecordKeyReader(
+                            keyFormat, keyReaderFactory, keyEncoding, logger);
+                    final Tuple<RecordField, Object> recordKey = keyReader.toWrapperRecordKey(
+                            consumerRecord.getKey().orElse(null), attributes);
+
+                    final RecordReader reader = readerFactory.createRecordReader(attributes, in, value.length, logger);
+                    toFlowFile(session, attributes, reader, consumerRecord, recordKey);
                     offsetTracker.update(consumerRecord);
                 }
             }
@@ -103,21 +121,23 @@ public class WrapperRecordStreamKafkaMessageConverter implements KafkaMessageCon
     private void toFlowFile(final ProcessSession session,
                             final Map<String, String> attributes,
                             final RecordReader reader,
-                            final ByteRecord consumerRecord) throws IOException, SchemaNotFoundException {
+                            final ByteRecord consumerRecord,
+                            Tuple<RecordField, Object> recordKey)
+            throws IOException, SchemaNotFoundException, MalformedRecordException {
         int recordCount = 0;
         FlowFile flowFile = session.create();
         flowFile = session.putAllAttributes(flowFile, attributes);
         try (final OutputStream rawOut = session.write(flowFile)) {
             final RecordSet recordSet = reader.createRecordSet();
             final RecordSchema schema = writerFactory.getSchema(attributes, recordSet.getSchema());
-            final RecordSchema schemaWrapper = WrapperRecord.toWrapperSchema(schema);
+            final RecordSchema schemaWrapper = WrapperRecord.toWrapperSchema(recordKey.getKey(), schema);
             final RecordSetWriter writer = writerFactory.createWriter(logger, schemaWrapper, rawOut, attributes);
             Record record;
             writer.beginRecordSet();
             while ((record = recordSet.next()) != null) {
                 ++recordCount;
-                final WrapperRecord wrapperRecord = new WrapperRecord(record, null, consumerRecord.getHeaders(), headerEncoding,
-                        consumerRecord.getTopic(), consumerRecord.getPartition(), consumerRecord.getOffset(), consumerRecord.getTimestamp());
+                final ConsumeWrapperRecord consumeWrapperRecord = new ConsumeWrapperRecord(headerEncoding);
+                final MapRecord wrapperRecord = consumeWrapperRecord.toWrapperRecord(consumerRecord, record, recordKey);
                 writer.write(wrapperRecord);
             }
             writer.finishRecordSet();

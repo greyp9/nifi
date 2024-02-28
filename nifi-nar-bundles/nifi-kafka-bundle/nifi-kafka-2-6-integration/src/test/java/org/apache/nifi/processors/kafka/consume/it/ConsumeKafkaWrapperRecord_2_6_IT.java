@@ -28,6 +28,8 @@ import org.apache.nifi.kafka.shared.property.KeyFormat;
 import org.apache.nifi.kafka.shared.property.OutputStrategy;
 import org.apache.nifi.processors.kafka.pubsub.ConsumeKafkaRecord_2_6;
 import org.apache.nifi.processors.kafka.pubsub.KafkaProcessor;
+import org.apache.nifi.provenance.ProvenanceEventRecord;
+import org.apache.nifi.provenance.ProvenanceEventType;
 import org.apache.nifi.reporting.InitializationException;
 import org.apache.nifi.util.MockFlowFile;
 import org.apache.nifi.util.TestRunner;
@@ -87,7 +89,8 @@ public class ConsumeKafkaWrapperRecord_2_6_IT extends ConsumeKafka_2_6_BaseIT {
         final List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(KafkaProcessor.REL_SUCCESS);
         assertEquals(1, flowFiles.size());
         final MockFlowFile flowFile = flowFiles.getFirst();
-        runner.getLogger().info(flowFile.getContent());
+        runner.getLogger().trace(flowFile.getContent());
+        flowFile.assertAttributeEquals("record.count", Long.toString(TEST_RECORD_COUNT));
 
         final ObjectMapper objectMapper = new ObjectMapper();
         final JsonNode jsonNodeTree = objectMapper.readTree(flowFile.getContent());
@@ -100,6 +103,8 @@ public class ConsumeKafkaWrapperRecord_2_6_IT extends ConsumeKafka_2_6_BaseIT {
 
             final ObjectNode key = assertInstanceOf(ObjectNode.class, wrapper.get("key"));
             assertEquals(2, key.size());
+            assertEquals(0, key.get("id").asInt());
+            assertEquals("K", key.get("name").asText());
 
             final ObjectNode value = assertInstanceOf(ObjectNode.class, wrapper.get("value"));
             assertTrue(Arrays.asList(1, 2, 3).contains(value.get("id").asInt()));
@@ -114,6 +119,11 @@ public class ConsumeKafkaWrapperRecord_2_6_IT extends ConsumeKafka_2_6_BaseIT {
             assertEquals(0, metadata.get("partition").asInt());
             assertEquals(0, metadata.get("offset").asInt());
             assertTrue(metadata.get("timestamp").isIntegralNumber());
+
+            final List<ProvenanceEventRecord> provenanceEvents = runner.getProvenanceEvents();
+            assertEquals(1, provenanceEvents.size());
+            final ProvenanceEventRecord provenanceEvent = provenanceEvents.getFirst();
+            assertEquals(ProvenanceEventType.RECEIVE, provenanceEvent.getEventType());
         }
     }
 }

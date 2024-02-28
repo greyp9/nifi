@@ -407,18 +407,15 @@ public class ConsumeKafka extends AbstractProcessor implements VerifiableProcess
     }
 
     private void processOutputStrategyUseWrapper(final ProcessContext context, final ProcessSession session, final PollingContext pollingContext, final Iterator<ByteRecord> consumerRecords) {
-/*
-        final KeyFormat keyFormat = context.getProperty(KEY_FORMAT).asAllowableValue(KeyFormat.class);
-        final RecordReaderFactory keyReaderFactory = context.getProperty(KEY_RECORD_READER).asControllerService(RecordReaderFactory.class);
-*/
         final RecordReaderFactory readerFactory = context.getProperty(RECORD_READER).asControllerService(RecordReaderFactory.class);
         final RecordSetWriterFactory writerFactory = context.getProperty(RECORD_WRITER).asControllerService(RecordSetWriterFactory.class);
+        final RecordReaderFactory keyReaderFactory = context.getProperty(KEY_RECORD_READER).asControllerService(RecordReaderFactory.class);
         final OffsetTracker offsetTracker = new OffsetTracker();
         final Runnable onSuccess = commitOffsets
                 ? () -> session.commitAsync(() -> consumerService.commit(offsetTracker.getPollingSummary(pollingContext)))
                 : session::commitAsync;
-        final KafkaMessageConverter converter = new WrapperRecordStreamKafkaMessageConverter(readerFactory, writerFactory,
-                headerEncoding, headerNamePattern, keyEncoding, commitOffsets, offsetTracker, onSuccess, getLogger());
+        final KafkaMessageConverter converter = new WrapperRecordStreamKafkaMessageConverter(readerFactory, writerFactory, keyReaderFactory,
+                headerEncoding, headerNamePattern, keyFormat, keyEncoding, commitOffsets, offsetTracker, onSuccess, getLogger());
         converter.toFlowFiles(session, consumerRecords);
     }
 

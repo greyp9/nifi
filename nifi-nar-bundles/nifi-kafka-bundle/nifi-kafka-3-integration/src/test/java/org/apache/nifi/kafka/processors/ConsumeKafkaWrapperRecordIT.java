@@ -55,7 +55,6 @@ class ConsumeKafkaWrapperRecordIT extends AbstractConsumeKafkaIT {
     private static final int TEST_RECORD_COUNT = 3;
 
     private static final int FIRST_PARTITION = 0;
-
     private static final long FIRST_OFFSET = 0;
 
     private TestRunner runner;
@@ -82,32 +81,26 @@ class ConsumeKafkaWrapperRecordIT extends AbstractConsumeKafkaIT {
         runner.setProperty(ConsumeKafka.AUTO_OFFSET_RESET, AutoOffsetReset.EARLIEST);
         runner.setProperty(ConsumeKafka.OUTPUT_STRATEGY, OutputStrategy.USE_WRAPPER);
         runner.setProperty(ConsumeKafka.KEY_FORMAT, KeyFormat.RECORD);
-
         runner.setProperty(ConsumeKafka.HEADER_NAME_PATTERN, "header*");
 
         runner.run(1, false, true);
-
-        final byte[] bytesFlowFile = IOUtils.toByteArray(Objects.requireNonNull(
-                getClass().getClassLoader().getResource(TEST_RESOURCE)));
-        final String flowFileString = new String(bytesFlowFile, StandardCharsets.UTF_8).trim();
-
+        final String messageKey = "{\"id\": 0,\"name\": \"K\"}";
+        final String message = new String(IOUtils.toByteArray(Objects.requireNonNull(
+                getClass().getClassLoader().getResource(TEST_RESOURCE))), StandardCharsets.UTF_8);
         final List<Header> headersPublish = Collections.singletonList(
                 new RecordHeader("header1", "value1".getBytes(StandardCharsets.UTF_8)));
-        produceOne(topic, 0, null, flowFileString, headersPublish);
+        produceOne(topic, 0, messageKey, message, headersPublish);
         final long pollUntil = System.currentTimeMillis() + DURATION_POLL.toMillis();
         while (System.currentTimeMillis() < pollUntil) {
             runner.run(1, false, false);
         }
-
         runner.run(1, true, false);
 
-        final List<MockFlowFile> flowFilesForRelationship = runner.getFlowFilesForRelationship(ConsumeKafka.SUCCESS);
-        assertEquals(1, flowFilesForRelationship.size());
-        final Iterator<MockFlowFile> flowFiles = flowFilesForRelationship.iterator();
-        assertTrue(flowFiles.hasNext());
-
-        final MockFlowFile flowFile = flowFiles.next();
-        runner.getLogger().info(flowFile.getContent());
+        runner.assertAllFlowFilesTransferred(ConsumeKafka.SUCCESS, 1);
+        final List<MockFlowFile> flowFiles = runner.getFlowFilesForRelationship(ConsumeKafka.SUCCESS);
+        assertEquals(1, flowFiles.size());
+        final MockFlowFile flowFile = flowFiles.getFirst();
+        runner.getLogger().trace(flowFile.getContent());
 
         flowFile.assertAttributeEquals("record.count", Long.toString(TEST_RECORD_COUNT));
 
@@ -120,10 +113,10 @@ class ConsumeKafkaWrapperRecordIT extends AbstractConsumeKafkaIT {
         while (elements.hasNext()) {
             final ObjectNode wrapper = assertInstanceOf(ObjectNode.class, elements.next());
 
-/*
             final ObjectNode key = assertInstanceOf(ObjectNode.class, wrapper.get("key"));
             assertEquals(2, key.size());
-*/
+            assertEquals(0, key.get("id").asInt());
+            assertEquals("K", key.get("name").asText());
 
             final ObjectNode value = assertInstanceOf(ObjectNode.class, wrapper.get("value"));
             assertTrue(Arrays.asList(1, 2, 3).contains(value.get("id").asInt()));
