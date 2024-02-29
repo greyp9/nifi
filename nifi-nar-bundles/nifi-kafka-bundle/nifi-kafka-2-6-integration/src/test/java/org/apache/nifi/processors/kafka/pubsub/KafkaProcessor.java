@@ -20,6 +20,9 @@ import org.apache.nifi.components.PropertyDescriptor;
 import org.apache.nifi.processor.Relationship;
 
 public class KafkaProcessor {
+    /**
+     * NIFI-11259 provide ability to reference package-private references.
+     */
     public static final PropertyDescriptor OUTPUT_STRATEGY = ConsumeKafkaRecord_2_6.OUTPUT_STRATEGY;
     public static final PropertyDescriptor KEY_FORMAT = ConsumeKafkaRecord_2_6.KEY_FORMAT;
 

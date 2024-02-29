@@ -46,6 +46,7 @@ public abstract class AbstractKafkaBaseIT {
 
     protected static final KafkaContainer kafkaContainer;
 
+    // NIFI-11259 - single testcontainers Kafka instance needed for all module integration tests
     static {
         kafkaContainer = new KafkaContainer(DockerImageName.parse(IMAGE_NAME));
         kafkaContainer.start();

@@ -57,6 +57,12 @@ public class ConsumeKafka_2_6_BaseIT {
 
     // https://www.testcontainers.org/test_framework_integration/manual_lifecycle_control/
     static {
+        /*
+         * NIFI-11259
+         * Consider abstracting this configuration to a base class shared with
+         * {@link org.apache.nifi.processors.kafka.publish.it.PublishKafka_2_6_BaseIT}, such that only one testcontainer
+         * is needed to service all module ITs.
+         */
         kafka = new KafkaContainer(DockerImageName.parse(IMAGE_NAME));
         kafka.start();
     }
