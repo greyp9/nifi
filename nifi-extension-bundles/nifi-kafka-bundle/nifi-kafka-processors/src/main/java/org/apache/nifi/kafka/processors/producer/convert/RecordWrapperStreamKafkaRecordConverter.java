@@ -23,6 +23,7 @@ import org.apache.nifi.kafka.processors.producer.wrapper.RecordMetadataStrategy;
 import org.apache.nifi.kafka.processors.producer.wrapper.WrapperRecord;
 import org.apache.nifi.kafka.service.api.header.RecordHeader;
 import org.apache.nifi.kafka.service.api.record.KafkaRecord;
+import org.apache.nifi.kafka.shared.attribute.KafkaFlowFileAttribute;
 import org.apache.nifi.logging.ComponentLog;
 import org.apache.nifi.schema.access.SchemaNotFoundException;
 import org.apache.nifi.serialization.MalformedRecordException;
@@ -106,8 +107,8 @@ public class RecordWrapperStreamKafkaRecordConverter implements KafkaRecordConve
                     final Record record = pushBackRecordSet.next();
                     final RecordFieldConverter converter = new RecordFieldConverter(record, flowFile, logger);
                     final byte[] key = converter.toBytes(WrapperRecord.KEY, keyWriterFactory);
-                    final byte[] value = converter.toBytes(WrapperRecord.VALUE, writerFactory);
-                    ProducerUtils.checkMessageSize(maxMessageSize, value.length);
+                    final byte[] value = toValue(converter.toBytes(WrapperRecord.VALUE, writerFactory), flowFile);
+                    ProducerUtils.checkMessageSize(maxMessageSize, value);
 
                     final List<RecordHeader> headers = getKafkaHeaders(record);
 
@@ -134,6 +135,12 @@ public class RecordWrapperStreamKafkaRecordConverter implements KafkaRecordConve
                             new RecordHeader(key, value.toString().getBytes(StandardCharsets.UTF_8))));
                 }
                 return headers;
+            }
+
+            private byte[] toValue(final byte[] bytes, final FlowFile flowFile) {
+                final String tombstone = flowFile.getAttribute(KafkaFlowFileAttribute.KAFKA_TOMBSTONE);
+                final boolean isTombstone = (Boolean.TRUE.toString().equals(tombstone) && (flowFile.getSize() == 0));
+                return isTombstone ? null : bytes;
             }
         };
     }

@@ -1,0 +1,43 @@
+[
+  {
+    "headers": {
+      "a1": "valueA1"
+    },
+    "key": {
+      "street-number": 105,
+      "street-name": "Main"
+    },
+    "value": "",
+    "metadata": {
+      "topic": "topic1",
+      "partition": "1"
+    }
+  },
+  {
+    "headers": {
+      "a1": "valueA1"
+    },
+    "key": {
+      "street-number": 105,
+      "street-name": "Main"
+    },
+    "value": null,
+    "metadata": {
+      "topic": "topic1",
+      "partition": "1"
+    }
+  },
+  {
+    "headers": {
+      "a1": "valueA1"
+    },
+    "key": {
+      "street-number": 205,
+      "street-name": "Main"
+    },
+    "metadata": {
+      "topic": "topic1",
+      "partition": "1"
+    }
+  }
+]
