@@ -64,6 +64,8 @@ public abstract class AbstractKafkaBaseIT {
         runner.addControllerService(CONNECTION_SERVICE_ID, connectionService);
         runner.setProperty(connectionService, Kafka3ConnectionService.BOOTSTRAP_SERVERS, kafkaContainer.getBootstrapServers());
         runner.setProperty(connectionService, Kafka3ConnectionService.MAX_POLL_RECORDS, "1000");
+        runner.setProperty(connectionService, "delivery.timeout.ms", "60000");  // publish dynamic property
+        runner.setProperty(connectionService, "fetch.max.wait.ms", "1000");  // consume dynamic property
         runner.enableControllerService(connectionService);
         return CONNECTION_SERVICE_ID;
     }

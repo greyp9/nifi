@@ -110,6 +110,15 @@ class PublishKafkaTest {
         assertNotNull(firstResult.getExplanation());
     }
 
+    @Test
+    public void testDynamicProperties() throws InitializationException {
+        when(kafkaConnectionService.getIdentifier()).thenReturn(SERVICE_ID);
+        runner.addControllerService(SERVICE_ID, kafkaConnectionService);
+        runner.setProperty(kafkaConnectionService, "delivery.timeout.ms", "60000");  // publish dynamic property
+        runner.setProperty(kafkaConnectionService, "fetch.max.wait.ms", "1000");  // consume dynamic property
+        runner.enableControllerService(kafkaConnectionService);
+    }
+
     private void setConnectionService() throws InitializationException {
         when(kafkaConnectionService.getIdentifier()).thenReturn(SERVICE_ID);
 

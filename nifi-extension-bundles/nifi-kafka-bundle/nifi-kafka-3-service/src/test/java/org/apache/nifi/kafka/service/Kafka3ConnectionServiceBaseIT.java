@@ -203,6 +203,8 @@ public class Kafka3ConnectionServiceBaseIT {
         final Map<String, String> properties = new LinkedHashMap<>();
         properties.put(Kafka3ConnectionService.BOOTSTRAP_SERVERS.getName(), kafkaContainer.getBootstrapServers());
         properties.put(Kafka3ConnectionService.CLIENT_TIMEOUT.getName(), CLIENT_TIMEOUT);
+        properties.put("delivery.timeout.ms", "60000");  // publish dynamic property
+        properties.put("fetch.max.wait.ms", "1000");  // consume dynamic property
         return properties;
     }
 
